@@ -20,13 +20,13 @@ class HttpServer {
         void onRequest(HttpRequest req, HttpResponseWriter writer);
     }
 
-    private interface SelectableChannelHandler {
-        void onReady(SelectableChannel chan, Object attachment) throws IOException;
+    private interface SelectorHandler {
+        void onReady(SelectionKey key) throws IOException;
     }
 
     private Map<String, Handler> mHttpHandlerMap = new HashMap<String, Handler>();
 
-    private Map<SelectionKey, SelectableChannelHandler> mSelectableChannelHandlerMap = new HashMap<SelectionKey, SelectableChannelHandler>();
+    private Map<SelectionKey, SelectorHandler> mSelectorHandlerMap = new HashMap<SelectionKey, SelectorHandler>();
 
     private ServerSocketChannel mListenChan;
     private Selector mSelector;
@@ -41,11 +41,20 @@ class HttpServer {
         mSelector.close();
     }
 
-    private void handleAccept(SelectableChannel chanArg, Object attachment) throws IOException {
+    private void handleAccept(SelectableChannel chanArg) throws IOException {
         ServerSocketChannel chan = (ServerSocketChannel) chanArg;
 
         SocketChannel newChan = chan.accept();
         newChan.configureBlocking(false);
+
+        // Prepare to read in the request.
+        SelectionKey key = newChan.register(mSelector, SelectionKey.OP_READ);
+        registerSelectorHandler(key, new SelectorHandler() {
+            public void onReady(SelectionKey key) throws IOException {
+                // TODO
+                //handleHttp(chan, attach);
+            }
+        });
     }
 
     public void listenAndServe(String listenAddr, int port) throws IllegalArgumentException, IOException {
@@ -59,16 +68,16 @@ class HttpServer {
 
         mSelector = Selector.open();
         SelectionKey listenKey = mListenChan.register(mSelector, SelectionKey.OP_ACCEPT);
-        registerSelectableChannelHandler(listenKey, new SelectableChannelHandler() {
-            public void onReady(SelectableChannel chan, Object attach) throws IOException {
-                handleAccept(chan, attach);
+        registerSelectorHandler(listenKey, new SelectorHandler() {
+            public void onReady(SelectionKey key) throws IOException {
+                handleAccept(key.channel());
             }
         });
 
         while (true) {
             int readyCount = mSelector.select();
             if (readyCount == 0) {
-                // We were interrupted.
+                // We were interrupted, or the selector was cancelled.
                 break;
             }
 
@@ -78,8 +87,8 @@ class HttpServer {
                     continue;
                 }
 
-                SelectableChannelHandler handler = mSelectableChannelHandlerMap.get(key);
-                handler.onReady(key.channel(), key.attachment());
+                SelectorHandler handler = mSelectorHandlerMap.get(key);
+                handler.onReady(key);
             }
         }
 
@@ -90,11 +99,11 @@ class HttpServer {
         mHttpHandlerMap.put(url, handler);
     }
 
-    private void registerSelectableChannelHandler(SelectionKey key, SelectableChannelHandler handler) {
-        mSelectableChannelHandlerMap.put(key, handler);
+    private void registerSelectorHandler(SelectionKey key, SelectorHandler handler) {
+        mSelectorHandlerMap.put(key, handler);
     }
 
-    private void unregisterSelectableChannelHandler(SelectionKey key) {
-        mSelectableChannelHandlerMap.remove(key);
+    private void unregisterSelectorHandler(SelectionKey key) {
+        mSelectorHandlerMap.remove(key);
     }
 };
