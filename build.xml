@@ -5,6 +5,6 @@
 
 	<target name="compile">
 		<mkdir dir="build/classes" />
-		<javac srcdir="src" destdir="build/classes" />
+		<javac includeantruntime="false" srcdir="src" destdir="build/classes" />
 	</target>
 </project>
