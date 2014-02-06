@@ -47,7 +47,7 @@ class HttpServer {
         SocketChannel newChan = chan.accept();
         newChan.configureBlocking(false);
 
-        // Prepare to read in the request.
+        // Prepare buffers for read/write processing over the channel.
         SelectionKey key = newChan.register(mSelector, SelectionKey.OP_READ);
         registerSelectorHandler(key, new SelectorHandler() {
             public void onReady(SelectionKey key) throws IOException {
