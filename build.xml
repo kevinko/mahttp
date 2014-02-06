@@ -1,8 +1,13 @@
 <project name="khttp">
 	<property name="build.dir" value="build" />
-	<property name="classes.dir" value="${build.dir}/classes" />
+	<property name="classes.dir" value="${build.dir}/classes/main" />
+	<property name="test-classes.dir" value="${build.dir}/classes/test" />
 	<property name="jar.dir" value="${build.dir}/jar" />
 	<property name="report.dir" value="${build.dir}/reports" />
+
+	<property name="jarfile" value="${jar.dir}/${ant.project.name}.jar" />
+	<property name="test-jarfile" value="${jar.dir}/${ant.project.name}-test.jar" />
+	<property name="junit-jarfile" value="/usr/share/java/junit4.jar" />
 
 	<property name="main.srcdir" value="${basedir}/src/main" />
 	<property name="test.srcdir" value="${basedir}/src/test" />
@@ -11,14 +16,27 @@
 		<delete dir="${build.dir}" />
 	</target>
 
-	<target name="compile">
+	<target name="compile" depends="compile-main,compile-test">
+	</target>
+
+	<target name="compile-main">
 		<mkdir dir="${classes.dir}" />
 		<javac includeantruntime="false" srcdir="${main.srcdir}" destdir="${classes.dir}" />
 	</target>
 
+	<target name="compile-test" depends="compile-main">
+		<mkdir dir="${test-classes.dir}" />
+		<javac includeantruntime="false" srcdir="${test.srcdir}" destdir="${test-classes.dir}">
+			<classpath>
+				<pathelement path="${junit-jarfile}" />
+				<pathelement path="${classes.dir}" />
+			</classpath>
+		</javac>
+	</target>
+
 	<target name="jar" depends="compile">
 		<mkdir dir="${jar.dir}" />
-		<jar destfile="${jar.dir}/${ant.project.name}.jar" basedir="${classes.dir}">
+		<jar destfile="${jarfile}" basedir="${classes.dir}">
 		</jar>
 	</target>
 
@@ -26,14 +44,14 @@
 		<mkdir dir="${report.dir}" />
 
 		<junit haltonfailure="true" printsummary="true" showoutput="yes">
-			<formatter type="xml" />
 			<classpath>
-				<pathelement location="lib/junit4.jar" />
+				<pathelement location="${jarfile}" />
+				<pathelement location="${test-classes.dir}" />
+				<pathelement location="${junit-jarfile}" />
 			</classpath>
-
 			<batchtest fork="yes" todir="${report.dir}" >
 				<fileset dir="${test.srcdir}">
-					<include name="**/*Test.java" />
+					<include name="**/*Test*.java" />
 				</fileset>
 			</batchtest>
 		</junit>
