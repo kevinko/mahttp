@@ -28,17 +28,19 @@ class HttpConnection {
 
     private State mState;
 
+    private HttpRequest mRequest;
+
     public HttpConnection(Selector selector, SocketChannel chan) throws IOException {
         mConn = new NonBlockingConnection(selector, chan, BUFFER_SIZE);
         mState = State.REQUEST_START;
+        mRequest = new HttpRequest();
     }
 
     private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
         switch (mState) {
             case REQUEST_START:
                 try {
-                    HttpRequest req = parseRequestStart(buf);
-                    if (req == null) {
+                    if (!parseRequestStart(buf, mRequest)) {
                         // Continue reading.  The recv() is already persistent.
                         return;
                     }
@@ -96,10 +98,10 @@ class HttpConnection {
 
     /**
      * @throws InvalidRequestException on bad request.
-     * @return an HttpRequest object holding values parsed from the request
-     * line or null if more data is needed.
+     * @return true if enough data existed in the buffer to parse a request
+     * line.
      */
-    private static HttpRequest parseRequestStart(ByteBuffer buf) throws InvalidRequestException {
+    private static boolean parseRequestStart(ByteBuffer buf, HttpRequest req) throws InvalidRequestException {
         // The spec allows for leading CRLFs.
         skipCrlf(buf);
 
@@ -112,11 +114,9 @@ class HttpConnection {
         }
 
         if (lineBuf == null) {
-            // Signal the more data is needed.
-            return null;
+            // Signal that more data is needed.
+            return false;
         }
-
-        HttpRequest req = new HttpRequest();
 
         try {
             HttpRequest.Method method = parseMethod(lineBuf);
@@ -137,7 +137,7 @@ class HttpConnection {
             throw new InvalidRequestException();
         }
 
-        return req;
+        return true;
     }
 
     /**
