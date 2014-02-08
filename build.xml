@@ -26,7 +26,7 @@
 
 	<target name="compile-test" depends="compile-main">
 		<mkdir dir="${test-classes.dir}" />
-		<javac includeantruntime="false" srcdir="${test.srcdir}" destdir="${test-classes.dir}">
+		<javac debug="on" includeantruntime="false" srcdir="${test.srcdir}" destdir="${test-classes.dir}">
 			<classpath>
 				<pathelement path="${junit-jarfile}" />
 				<pathelement path="${classes.dir}" />
