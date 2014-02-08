@@ -68,4 +68,19 @@ public class HttpConnectionParserTest {
         // size and nothing can be appended to it to lead to a newline.
         HttpConnectionParser.parseLine(buf);
     }
+
+    @Test
+    public void testParseWord() {
+        String testStr = "\n\r \tword1 word2  word3";
+        ByteBuffer buf = ByteBuffer.wrap(testStr.getBytes(US_ASCII_CHARSET));
+        assertEquals(HttpConnectionParser.parseWord(buf), "word1");
+        assertEquals(HttpConnectionParser.parseWord(buf), "word2");
+        assertEquals(HttpConnectionParser.parseWord(buf), "word3");
+        assertEquals(HttpConnectionParser.parseWord(buf), "");
+
+        testStr = "word1\n";
+        buf = ByteBuffer.wrap(testStr.getBytes(US_ASCII_CHARSET));
+        assertEquals(HttpConnectionParser.parseWord(buf), "word1");
+        assertEquals(HttpConnectionParser.parseWord(buf), "");
+    }
 }
