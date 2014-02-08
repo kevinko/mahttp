@@ -23,6 +23,10 @@ public class HttpConnectionParserTest {
         assertTrue(dataStr.equals(v));
     }
 
+    private ByteBuffer makeByteBuffer(String s) {
+        return ByteBuffer.wrap(s.getBytes(US_ASCII_CHARSET));
+    }
+
     @Test
     public void testParseLine() {
         String testStr = "line1\nline2\r\n\nline3";
@@ -82,5 +86,23 @@ public class HttpConnectionParserTest {
         buf = ByteBuffer.wrap(testStr.getBytes(US_ASCII_CHARSET));
         assertEquals(HttpConnectionParser.parseWord(buf), "word1");
         assertEquals(HttpConnectionParser.parseWord(buf), "");
+    }
+
+    @Test
+    public void testParseVersion() {
+        ByteBuffer buf = makeByteBuffer("HTTP/1.0");
+        assertEquals(HttpConnectionParser.parseHttpVersion(buf), 0);
+
+        buf = makeByteBuffer("HTTP/1.1");
+        assertEquals(HttpConnectionParser.parseHttpVersion(buf), 1);
+
+        buf = makeByteBuffer("HTTP/1.12");
+        assertEquals(HttpConnectionParser.parseHttpVersion(buf), 12);
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void testParseVersionException() {
+        ByteBuffer buf = makeByteBuffer("HTTP /1.2");
+        HttpConnectionParser.parseHttpVersion(buf);
     }
 }
