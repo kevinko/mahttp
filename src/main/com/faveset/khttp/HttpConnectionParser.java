@@ -11,9 +11,11 @@ class HttpConnectionParser {
 
     /**
      * @return null if a line has yet to be parsed from buf, in which case
-     * buf will be compacted so that new data can be loaded.  Otherwise, returns
-     * a buffer holding the parsed line.  The array backing the buffer is
-     * shared, so one must be careful about modifying the returned buffer.
+     * buf will be compacted with the remainder so that new data can be
+     * loaded.  Otherwise, returns a buffer holding the parsed line.  The
+     * array backing the buffer is shared, so one must be careful about
+     * modifying the returned buffer.
+     *
      * Carriage returns might be in the returned string but newlines will not.
      *
      * @throws BufferOverflowException if the line is longer than buf's
@@ -31,7 +33,8 @@ class HttpConnectionParser {
 
             if (ch == '\n') {
                 ByteBuffer result = buf.duplicate();
-                result.limit(buf.position());
+                // Exclude the delimiter.
+                result.limit(buf.position() - 1);
                 result.position(startPos);
                 return result;
             }
