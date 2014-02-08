@@ -37,12 +37,22 @@ class HttpConnection {
     }
 
     private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
+        boolean done = false;
+        do {
+            done = handleStateStep(conn, buf);
+        } while (!done);
+    }
+
+    /**
+     * @return true if receiving is done and more data is needed.
+     */
+    private boolean handleStateStep(NonBlockingConnection conn, ByteBuffer buf) {
         switch (mState) {
             case REQUEST_START:
                 try {
                     if (!parseRequestStart(buf, mRequest)) {
                         // Continue reading.  The recv() is already persistent.
-                        return;
+                        return true;
                     }
                     mState = State.REQUEST_HEADERS;
                 } catch (InvalidRequestException e) {
@@ -54,6 +64,8 @@ class HttpConnection {
                 // TODO
                 break;
         }
+
+        return false;
     }
 
     /**
