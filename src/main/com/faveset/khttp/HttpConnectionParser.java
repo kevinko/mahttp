@@ -81,16 +81,15 @@ class HttpConnectionParser {
     }
 
     /**
-     * Parses the next word from buf, using whitespace as a delimiter.
-     * Repeated whitespace will be trimmed.
+     * Parses the next word from buf, using whitespace ([\t\s\n\r]) as a
+     * delimiter.  Repeated whitespace will be trimmed.
      *
      * buf's position will be incremented to one past the separating LWS
      * character.
      *
-     * The separating whitespace is not included in the result.
-     *
-     * This will return the empty string if buf is exhausted.  Otherwise, the
-     * contents will be interpreted as an ASCII value.
+     * This will return the built-up string (possibly empty) when buf is
+     * exhausted.  Thus, it is designed for when buf contains a self-contained
+     * line.  Otherwise, the contents will be interpreted as an ASCII value.
      */
     public static String parseWord(ByteBuffer buf) {
         int startPos = buf.position();
@@ -98,24 +97,32 @@ class HttpConnectionParser {
         // Eat up all leading whitespace.
         while (buf.hasRemaining()) {
             char ch = (char) buf.get();
-            if (ch != ' ' && ch != '\t') {
+            if (ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r') {
                 break;
             }
             startPos++;
         }
 
-        while (buf.hasRemaining()) {
-            // At this point, buf.position is not LWS.
+        ByteBuffer result = buf.duplicate();
+        result.position(startPos);
+
+        while (true) {
+            // At this point, buf.position() is not LWS due to the prior loop.
+            if (!buf.hasRemaining()) {
+                // Pass the entire string.
+                result.limit(buf.position());
+                break;
+            }
+
             char ch = (char) buf.get();
-            if (ch == ' ' || ch == '\t') {
+            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+                // Exclude the whitespace delimiter.
+                result.limit(buf.position() - 1);
                 break;
             }
         }
 
-        ByteBuffer result = buf.duplicate();
-        result.limit(buf.position());
-        result.position(startPos);
-        return new String(result.array(), US_ASCII_CHARSET);
+        return new String(result.array(), result.position(), result.remaining(), US_ASCII_CHARSET);
     }
 
     /**
