@@ -9,6 +9,26 @@ import java.nio.charset.Charset;
 class HttpConnectionParser {
     private static final Charset US_ASCII_CHARSET = Charset.forName("US-ASCII");
 
+    /**
+     * @return true if lineBuf has leading whitespace, which would
+     * signal header value folding.
+     */
+    public static boolean hasLeadingSpace(ByteBuffer lineBuf) {
+        if (!lineBuf.hasRemaining()) {
+            return false;
+        }
+
+        char ch = (char) lineBuf.get(lineBuf.position());
+        switch (ch) {
+            case ' ':
+            case '\t':
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
     private static boolean isCtl(char ch) {
         if (ch <= 31 || ch == 127) {
             return true;
