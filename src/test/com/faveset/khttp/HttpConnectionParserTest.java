@@ -108,6 +108,17 @@ public class HttpConnectionParserTest {
     }
 
     @Test
+    public void testParseText() {
+        ByteBuffer buf = makeByteBuffer("Hello: world");
+        assertEquals(HttpConnectionParser.parseText(buf), "Hello: world");
+        assertFalse(buf.hasRemaining());
+
+        buf = makeByteBuffer("Hello: world\037");
+        assertEquals(HttpConnectionParser.parseText(buf), "Hello: world");
+        assertEquals(buf.get(), '\037');
+    }
+
+    @Test
     public void testParseToken() {
         ByteBuffer buf = makeByteBuffer("Hello: world");
         assertEquals(HttpConnectionParser.parseToken(buf), "Hello");

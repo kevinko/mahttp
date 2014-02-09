@@ -133,6 +133,28 @@ class HttpConnectionParser {
     }
 
     /**
+     * Parses the next TEXT from buf, where TEXT consists of any OCTET except
+     * CTLs.
+     *
+     * buf's position will be incremented to the position of the separating
+     * delimiter or the end of buf if none was found.
+     */
+    public static String parseText(ByteBuffer buf) {
+        ByteBuffer result = buf.duplicate();
+
+        while (buf.hasRemaining()) {
+            char ch = (char) buf.get();
+            if (isCtl(ch)) {
+                buf.position(buf.position() - 1);
+                break;
+            }
+        }
+
+        result.limit(buf.position());
+        return new String(result.array(), result.position(), result.remaining(), US_ASCII_CHARSET);
+    }
+
+    /**
      * Parses the next token from buf, where a token consists of any CHAR except
      * CTLs or separators.
      *
