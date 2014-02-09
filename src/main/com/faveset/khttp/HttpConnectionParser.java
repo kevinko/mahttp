@@ -9,6 +9,58 @@ import java.nio.charset.Charset;
 class HttpConnectionParser {
     private static final Charset US_ASCII_CHARSET = Charset.forName("US-ASCII");
 
+    private static boolean isCtl(char ch) {
+        if (ch <= 31 || ch == 127) {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isSeparator(char ch) {
+        if (ch >= 0x30 && ch <= 0x39) {
+            // [0-9]
+            return false;
+        }
+
+        if (ch >= 0x41 && ch <= 0x5a) {
+            // [A-Z]
+            return false;
+        }
+
+        if (ch >= 0x61 && ch <= 0x7a) {
+            // [a-z]
+            return false;
+        }
+
+        switch (ch) {
+            case '(':
+            case ')':
+            case '<':
+            case '>':
+            case '@':
+            case ',':
+            case ';':
+            case ':':
+            case '\\':
+            case '"':
+            case '/':
+            case '[':
+            case ']':
+            case '?':
+            case '=':
+            case '{':
+            case '}':
+            case ' ':
+            case '\t':
+                return true;
+
+            default:
+                break;
+        }
+
+        return false;
+    }
+
     /**
      * @return null if a line has yet to be parsed from buf, in which case
      * buf will be compacted with the remainder so that new data can be
@@ -78,6 +130,30 @@ class HttpConnectionParser {
             throw new IllegalArgumentException();
         }
         return HttpRequest.Method.valueOf(methodStr);
+    }
+
+    /**
+     * Parses the next token from buf, where a token consists of any CHAR except
+     * CTLs or separators.
+     *
+     * buf's position will be incremented to that of the separating delimiter.
+     * This way, one can distinguish between an empty value and an invalid
+     * header without a delimiter.
+     */
+    public static String parseToken(ByteBuffer buf) {
+        ByteBuffer result = buf.duplicate();
+
+        while (buf.hasRemaining()) {
+            char ch = (char) buf.get();
+            if (isCtl(ch) || isSeparator(ch)) {
+                // Set the position to the delimiter.
+                buf.position(buf.position() - 1);
+                break;
+            }
+        }
+
+        result.limit(buf.position());
+        return new String(result.array(), result.position(), result.remaining(), US_ASCII_CHARSET);
     }
 
     /**

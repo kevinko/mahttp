@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -104,5 +105,20 @@ public class HttpConnectionParserTest {
     public void testParseVersionException() {
         ByteBuffer buf = makeByteBuffer("HTTP /1.2");
         HttpConnectionParser.parseHttpVersion(buf);
+    }
+
+    @Test
+    public void testParseToken() {
+        ByteBuffer buf = makeByteBuffer("Hello: world");
+        assertEquals(HttpConnectionParser.parseToken(buf), "Hello");
+        assertEquals(buf.get(), ':');
+
+        buf = makeByteBuffer(":");
+        assertEquals(HttpConnectionParser.parseToken(buf), "");
+        assertEquals(buf.get(), ':');
+
+        buf = makeByteBuffer("");
+        assertEquals(HttpConnectionParser.parseToken(buf), "");
+        assertFalse(buf.hasRemaining());
     }
 }
