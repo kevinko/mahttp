@@ -6,6 +6,10 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -131,5 +135,27 @@ public class HttpConnectionParserTest {
         buf = makeByteBuffer("");
         assertEquals(HttpConnectionParser.parseToken(buf), "");
         assertFalse(buf.hasRemaining());
+    }
+
+    @Test
+    public void testSkipWhitespaceString() {
+        String s = "hello";
+        assertEquals(HttpConnectionParser.skipWhitespaceString(s, 0), 0);
+        assertEquals(HttpConnectionParser.skipWhitespaceStringReverse(s, s.length() - 1), s.length() - 1);
+
+        s = " hello ";
+        assertEquals(HttpConnectionParser.skipWhitespaceString(s, 0), 1);
+        assertEquals(HttpConnectionParser.skipWhitespaceStringReverse(s, s.length() - 1), s.length() - 2);
+        assertEquals(HttpConnectionParser.skipWhitespaceStringReverse(s, s.length()), s.length() - 2);
+    }
+
+    @Test
+    public void testSplitTrim() {
+        assertEquals(new ArrayList<String>(), HttpConnectionParser.splitTrim("", ','));
+        assertEquals(Arrays.asList("", ""), HttpConnectionParser.splitTrim(",", ','));
+        assertEquals(Arrays.asList("", "", ""), HttpConnectionParser.splitTrim(",,", ','));
+        assertEquals(Arrays.asList(""), HttpConnectionParser.splitTrim(" ", ','));
+        assertEquals(Arrays.asList("", ""), HttpConnectionParser.splitTrim(" , ", ','));
+        assertEquals(Arrays.asList("hello", "world"), HttpConnectionParser.splitTrim(" hello   ,world   ", ','));
     }
 }

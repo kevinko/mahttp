@@ -6,6 +6,9 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
+import java.util.ArrayList;
+import java.util.List;
+
 class HttpConnectionParser {
     private static final Charset US_ASCII_CHARSET = Charset.forName("US-ASCII");
 
@@ -19,14 +22,7 @@ class HttpConnectionParser {
         }
 
         char ch = (char) lineBuf.get(lineBuf.position());
-        switch (ch) {
-            case ' ':
-            case '\t':
-                return true;
-
-            default:
-                return false;
-        }
+        return isWhitespace(ch);
     }
 
     private static boolean isCtl(char ch) {
@@ -79,6 +75,17 @@ class HttpConnectionParser {
         }
 
         return false;
+    }
+
+    private static boolean isWhitespace(char ch) {
+        switch (ch) {
+            case ' ':
+            case '\t':
+                return true;
+
+            default:
+                return false;
+        }
     }
 
     /**
@@ -199,6 +206,20 @@ class HttpConnectionParser {
     }
 
     /**
+     * @return an untrimmed word taken from s at offset until delim is
+     * encountered.  The remainder of the string is returned if no delimiter
+     * is found.
+     */
+    private static String parseWordString(String s, char delim, int offset) {
+        int endIndex = s.length();
+        int delimIndex = s.indexOf(delim, offset);
+        if (delimIndex != -1) {
+            endIndex = delimIndex;
+        }
+        return s.substring(offset, endIndex);
+    }
+
+    /**
      * Parses the next word from buf, using whitespace ([\t\s\n\r]) as a
      * delimiter.  Repeated whitespace will be trimmed.
      *
@@ -244,6 +265,32 @@ class HttpConnectionParser {
     }
 
     /**
+     * Splits the string in buf by delim, trimming any whitespace between
+     * elements.
+     */
+    public static List<String> splitTrim(String s, char delim) {
+        List<String> resultList = new ArrayList<String>();
+
+        int index = 0;
+        while (index < s.length()) {
+            String word = parseWordString(s, delim, index);
+            resultList.add(word.trim());
+
+            int delimIndex = index + word.length();
+            if (delimIndex == s.length() - 1) {
+                // Handle the special case when nothing follows the final
+                // delimiter.
+                resultList.add("");
+            }
+
+            // Skip over the delimiter.
+            index = delimIndex + 1;
+        }
+
+        return resultList;
+    }
+
+    /**
      * Skips all leading CRLFs in buf.
      */
     public static void skipCrlf(ByteBuffer buf) {
@@ -255,5 +302,67 @@ class HttpConnectionParser {
                 break;
             }
         }
+    }
+
+    public static void skipWhitespace(ByteBuffer buf) {
+        while (buf.hasRemaining()) {
+            char ch = (char) buf.get();
+            if (!isWhitespace(ch)) {
+                // Put back the read character.
+                buf.position(buf.position() - 1);
+                break;
+            }
+        }
+    }
+
+    /**
+     * @return the offset of the first non-whitespace char in s after offset,
+     * or s.length() if none is found.
+     */
+    public static int skipWhitespaceString(String s, int offset) {
+        for (int ii = offset; ii < s.length(); ii++) {
+            char ch = s.charAt(ii);
+            if (!isWhitespace(ch)) {
+                return ii;
+            }
+        }
+        return s.length();
+    }
+
+    /**
+     * Seeks backwards from the current limit until a non-whitespace
+     * character is encountered.  If buf consists of all whitespace characters,
+     * buf.limit() will be set to buf.position().  On success, buf's limit will
+     * be set to one past the non-whitespace character.
+     */
+    public static void skipWhitespaceReverse(ByteBuffer buf) {
+        for (int ii = buf.limit() - 1; ii >= buf.position(); ii--) {
+            char ch = (char) buf.get(ii);
+            if (!isWhitespace(ch)) {
+                buf.limit(ii + 1);
+                break;
+            }
+        }
+    }
+
+    /**
+     * @param offset will be adjusted if it exceeds a valid position within s.
+     *
+     * @return the offset of the index of the first non-whitespace character
+     * found by traversing s from the right beginning at offset (inclusive).
+     * Returns -1 if no such index is found.
+     */
+    public static int skipWhitespaceStringReverse(String s, int offset) {
+        if (offset >= s.length()) {
+            offset = s.length() - 1;
+        }
+
+        for (int ii = offset; ii >= 0; ii--) {
+            char ch = s.charAt(ii);
+            if (!isWhitespace(ch)) {
+                return ii;
+            }
+        }
+        return -1;
     }
 }
