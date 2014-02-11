@@ -192,7 +192,11 @@ class Strings {
         if (methodStr.length() == 0) {
             throw new ParseException();
         }
-        return HttpRequest.Method.valueOf(methodStr);
+        try {
+            return HttpRequest.Method.valueOf(methodStr);
+        } catch (IllegalArgumentException e) {
+            throw new ParseException();
+        }
     }
 
     /**
