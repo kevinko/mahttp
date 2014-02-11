@@ -38,4 +38,31 @@ public class RequestHeaderHandlerTest {
         buf.flip();
         assertTrue(handler.handleState(null, buf, state));
     }
+
+    // TODO: test partial.
+
+    @Test
+    public void testContinuation() throws InvalidRequestException {
+        ByteBuffer buf = Helper.makeByteBuffer("hello: world\n");
+        HandlerState state = new HandlerState();
+
+        RequestHeaderHandler handler = new RequestHeaderHandler();
+        assertFalse(handler.handleState(null, buf, state));
+
+        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
+        assertEquals("world", state.getRequestBuilder().getHeaderFirst("hello"));
+
+        buf.clear();
+        buf.put(Helper.makeByteBuffer(" hi?\n"));
+        buf.flip();
+        assertFalse(handler.handleState(null, buf, state));
+
+        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
+        assertEquals("world hi?", state.getRequestBuilder().getHeaderFirst("hello"));
+
+        buf.clear();
+        buf.put(Helper.makeByteBuffer("\n"));
+        buf.flip();
+        assertTrue(handler.handleState(null, buf, state));
+    }
 }
