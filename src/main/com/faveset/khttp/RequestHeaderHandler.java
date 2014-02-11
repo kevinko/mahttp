@@ -10,13 +10,21 @@ class RequestHeaderHandler implements StateHandler {
      * Parses a set of request headers from buf and populates req.
      * state's LastHeaderName will be updated as each header is parsed.
      *
+     * @param conn is not used
+     *
      * @return false if more data is needed for reading into buf.  True if
-     * header parsing is complete.
+     * ALL header parsing is complete; a state transition should occur in
+     * this case.
      *
      * @throws InvalidRequestException on bad request.
      */
     public boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
         HttpRequest req = state.getRequest();
+
+        if (Strings.hasLeadingCrlf(buf)) {
+            // We found the lone CRLF.  We're done.
+            return true;
+        }
 
         ByteBuffer lineBuf;
         try {
@@ -38,11 +46,6 @@ class RequestHeaderHandler implements StateHandler {
             String value = parseHeaderValue(lineBuf);
             req.addHeader(state.getLastHeaderName(), value);
             return false;
-        }
-
-        if (Strings.hasLeadingCrlf(lineBuf)) {
-            // We found the lone CRLF.  We're done.
-            return true;
         }
 
         try {
