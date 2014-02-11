@@ -32,7 +32,7 @@ class HttpRequest {
      * Appends value to the mapping list for name, creating a mapping if
      * necessary.
      */
-    public void appendHeader(String name, String value) {
+    public void addHeader(String name, String value) {
         List<String> l = mHeaders.get(name);
         if (l == null) {
             l = new ArrayList<String>();
