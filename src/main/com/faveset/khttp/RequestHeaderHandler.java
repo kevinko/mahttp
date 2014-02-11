@@ -20,7 +20,7 @@ class RequestHeaderHandler implements StateHandler {
 
         ByteBuffer lineBuf;
         try {
-            lineBuf = HttpConnectionParser.parseLine(buf);
+            lineBuf = Strings.parseLine(buf);
         } catch (BufferOverflowException e) {
             throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.RequestURITooLong);
         }
@@ -30,7 +30,7 @@ class RequestHeaderHandler implements StateHandler {
             return false;
         }
 
-        if (HttpConnectionParser.hasLeadingSpace(lineBuf)) {
+        if (Strings.hasLeadingSpace(lineBuf)) {
             // Handle continuations.
             if (state.getLastHeaderName().isEmpty()) {
                 throw new InvalidRequestException("Invalid request header continuation", HttpStatus.BadRequest);
@@ -40,7 +40,7 @@ class RequestHeaderHandler implements StateHandler {
             return false;
         }
 
-        if (HttpConnectionParser.hasLeadingCrlf(lineBuf)) {
+        if (Strings.hasLeadingCrlf(lineBuf)) {
             // We found the lone CRLF.  We're done.
             return true;
         }
@@ -67,7 +67,7 @@ class RequestHeaderHandler implements StateHandler {
     private void parseHeaderLine(ByteBuffer lineBuf, HandlerState state) throws IllegalArgumentException {
         HttpRequest req = state.getRequest();
 
-        String fieldName = HttpConnectionParser.parseToken(lineBuf);
+        String fieldName = Strings.parseToken(lineBuf);
         if (fieldName.length() == 0 || !lineBuf.hasRemaining()) {
             throw new IllegalArgumentException();
         }
@@ -90,7 +90,7 @@ class RequestHeaderHandler implements StateHandler {
      * @return a String containing the trimmed value.
      */
     private static String parseHeaderValue(ByteBuffer valueBuf) {
-        HttpConnectionParser.skipWhitespace(valueBuf);
-        return HttpConnectionParser.parseText(valueBuf);
+        Strings.skipWhitespace(valueBuf);
+        return Strings.parseText(valueBuf);
     }
 }

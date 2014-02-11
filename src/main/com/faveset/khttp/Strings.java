@@ -9,7 +9,7 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
-class HttpConnectionParser {
+class Strings {
     private static final Charset US_ASCII_CHARSET = Charset.forName("US-ASCII");
 
     /**

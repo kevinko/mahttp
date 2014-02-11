@@ -17,12 +17,12 @@ class RequestStartHandler implements StateHandler {
         HttpRequest req = state.getRequest();
 
         // The spec allows for leading CRLFs.
-        HttpConnectionParser.skipCrlf(buf);
+        Strings.skipCrlf(buf);
 
         // Now, look for the Request-Line.
         ByteBuffer lineBuf;
         try {
-            lineBuf = HttpConnectionParser.parseLine(buf);
+            lineBuf = Strings.parseLine(buf);
         } catch (BufferOverflowException e) {
             throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.RequestURITooLong);
         }
@@ -33,20 +33,20 @@ class RequestStartHandler implements StateHandler {
         }
 
         try {
-            HttpRequest.Method method = HttpConnectionParser.parseMethod(lineBuf);
+            HttpRequest.Method method = Strings.parseMethod(lineBuf);
             req.setMethod(method);
         } catch (IllegalArgumentException e) {
             throw new InvalidRequestException("Unknown request method", HttpStatus.NotImplemented);
         }
 
-        String reqUri = HttpConnectionParser.parseWord(lineBuf);
+        String reqUri = Strings.parseWord(lineBuf);
         if (reqUri.length() == 0) {
             throw new InvalidRequestException("Request is missing URI", HttpStatus.BadRequest);
         }
         req.setUri(reqUri);
 
         try {
-            int version = HttpConnectionParser.parseHttpVersion(lineBuf);
+            int version = Strings.parseHttpVersion(lineBuf);
             if (version > 1) {
                 // We only support HTTP/1.0 and HTTP/1.1.
                 throw new InvalidRequestException("Unsupported HTTP version in request", HttpStatus.NotImplemented);
