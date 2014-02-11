@@ -20,7 +20,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
-public class HttpConnectionParserTest {
+public class StringsTest {
     private static final Charset US_ASCII_CHARSET = Charset.forName("US-ASCII");
 
     private void compare(ByteBuffer buf, String v) {
@@ -34,15 +34,15 @@ public class HttpConnectionParserTest {
 
     @Test
     public void testHasCrlf() {
-        assertTrue(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer("\n")));
-        assertTrue(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer("\r\n")));
-        assertFalse(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer(" \n")));
-        assertFalse(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer(" n")));
-        assertFalse(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer(" \r\n")));
+        assertTrue(Strings.hasLeadingCrlf(makeByteBuffer("\n")));
+        assertTrue(Strings.hasLeadingCrlf(makeByteBuffer("\r\n")));
+        assertFalse(Strings.hasLeadingCrlf(makeByteBuffer(" \n")));
+        assertFalse(Strings.hasLeadingCrlf(makeByteBuffer(" n")));
+        assertFalse(Strings.hasLeadingCrlf(makeByteBuffer(" \r\n")));
 
         ByteBuffer buf = makeByteBuffer(" \r\n");
         int oldPos = buf.position();
-        assertFalse(HttpConnectionParser.hasLeadingCrlf(buf));
+        assertFalse(Strings.hasLeadingCrlf(buf));
         assertEquals(oldPos, buf.position());
     }
 
@@ -51,16 +51,16 @@ public class HttpConnectionParserTest {
         String testStr = "line1\nline2\r\n\nline3";
         ByteBuffer buf = ByteBuffer.wrap(testStr.getBytes(US_ASCII_CHARSET));
 
-        ByteBuffer result = HttpConnectionParser.parseLine(buf);
+        ByteBuffer result = Strings.parseLine(buf);
         compare(result, "line1");
 
-        result = HttpConnectionParser.parseLine(buf);
+        result = Strings.parseLine(buf);
         compare(result, "line2\r");
 
-        result = HttpConnectionParser.parseLine(buf);
+        result = Strings.parseLine(buf);
         compare(result, "");
 
-        result = HttpConnectionParser.parseLine(buf);
+        result = Strings.parseLine(buf);
         assertEquals(result, null);
         ByteBuffer cmp = buf.duplicate();
         cmp.flip();
@@ -73,10 +73,10 @@ public class HttpConnectionParserTest {
         buf.flip();
 
         // Compare the appended buffer.
-        result = HttpConnectionParser.parseLine(buf);
+        result = Strings.parseLine(buf);
         compare(result, "line3line3b");
 
-        result = HttpConnectionParser.parseLine(buf);
+        result = Strings.parseLine(buf);
         assertEquals(result, null);
         cmp = buf.duplicate();
         cmp.flip();
@@ -89,87 +89,87 @@ public class HttpConnectionParserTest {
         ByteBuffer buf = ByteBuffer.wrap(testStr.getBytes(US_ASCII_CHARSET));
         // This should throw an exception, since we assume that buf is of fixed
         // size and nothing can be appended to it to lead to a newline.
-        HttpConnectionParser.parseLine(buf);
+        Strings.parseLine(buf);
     }
 
     @Test
     public void testParseWord() {
         String testStr = "\n\r \tword1 word2  word3";
         ByteBuffer buf = ByteBuffer.wrap(testStr.getBytes(US_ASCII_CHARSET));
-        assertEquals(HttpConnectionParser.parseWord(buf), "word1");
-        assertEquals(HttpConnectionParser.parseWord(buf), "word2");
-        assertEquals(HttpConnectionParser.parseWord(buf), "word3");
-        assertEquals(HttpConnectionParser.parseWord(buf), "");
+        assertEquals(Strings.parseWord(buf), "word1");
+        assertEquals(Strings.parseWord(buf), "word2");
+        assertEquals(Strings.parseWord(buf), "word3");
+        assertEquals(Strings.parseWord(buf), "");
 
         testStr = "word1\n";
         buf = ByteBuffer.wrap(testStr.getBytes(US_ASCII_CHARSET));
-        assertEquals(HttpConnectionParser.parseWord(buf), "word1");
-        assertEquals(HttpConnectionParser.parseWord(buf), "");
+        assertEquals(Strings.parseWord(buf), "word1");
+        assertEquals(Strings.parseWord(buf), "");
     }
 
     @Test
-    public void testParseVersion() {
+    public void testParseVersion() throws ParseException {
         ByteBuffer buf = makeByteBuffer("HTTP/1.0");
-        assertEquals(HttpConnectionParser.parseHttpVersion(buf), 0);
+        assertEquals(Strings.parseHttpVersion(buf), 0);
 
         buf = makeByteBuffer("HTTP/1.1");
-        assertEquals(HttpConnectionParser.parseHttpVersion(buf), 1);
+        assertEquals(Strings.parseHttpVersion(buf), 1);
 
         buf = makeByteBuffer("HTTP/1.12");
-        assertEquals(HttpConnectionParser.parseHttpVersion(buf), 12);
+        assertEquals(Strings.parseHttpVersion(buf), 12);
     }
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testParseVersionException() {
+    @Test(expected=ParseException.class)
+    public void testParseVersionException() throws ParseException {
         ByteBuffer buf = makeByteBuffer("HTTP /1.2");
-        HttpConnectionParser.parseHttpVersion(buf);
+        Strings.parseHttpVersion(buf);
     }
 
     @Test
     public void testParseText() {
         ByteBuffer buf = makeByteBuffer("Hello: world");
-        assertEquals(HttpConnectionParser.parseText(buf), "Hello: world");
+        assertEquals(Strings.parseText(buf), "Hello: world");
         assertFalse(buf.hasRemaining());
 
         buf = makeByteBuffer("Hello: world\037");
-        assertEquals(HttpConnectionParser.parseText(buf), "Hello: world");
+        assertEquals(Strings.parseText(buf), "Hello: world");
         assertEquals(buf.get(), '\037');
     }
 
     @Test
     public void testParseToken() {
         ByteBuffer buf = makeByteBuffer("Hello: world");
-        assertEquals(HttpConnectionParser.parseToken(buf), "Hello");
+        assertEquals(Strings.parseToken(buf), "Hello");
         assertEquals(buf.get(), ':');
 
         buf = makeByteBuffer(":");
-        assertEquals(HttpConnectionParser.parseToken(buf), "");
+        assertEquals(Strings.parseToken(buf), "");
         assertEquals(buf.get(), ':');
 
         buf = makeByteBuffer("");
-        assertEquals(HttpConnectionParser.parseToken(buf), "");
+        assertEquals(Strings.parseToken(buf), "");
         assertFalse(buf.hasRemaining());
     }
 
     @Test
     public void testSkipWhitespaceString() {
         String s = "hello";
-        assertEquals(HttpConnectionParser.skipWhitespaceString(s, 0), 0);
-        assertEquals(HttpConnectionParser.skipWhitespaceStringReverse(s, s.length() - 1), s.length() - 1);
+        assertEquals(Strings.skipWhitespaceString(s, 0), 0);
+        assertEquals(Strings.skipWhitespaceStringReverse(s, s.length() - 1), s.length() - 1);
 
         s = " hello ";
-        assertEquals(HttpConnectionParser.skipWhitespaceString(s, 0), 1);
-        assertEquals(HttpConnectionParser.skipWhitespaceStringReverse(s, s.length() - 1), s.length() - 2);
-        assertEquals(HttpConnectionParser.skipWhitespaceStringReverse(s, s.length()), s.length() - 2);
+        assertEquals(Strings.skipWhitespaceString(s, 0), 1);
+        assertEquals(Strings.skipWhitespaceStringReverse(s, s.length() - 1), s.length() - 2);
+        assertEquals(Strings.skipWhitespaceStringReverse(s, s.length()), s.length() - 2);
     }
 
     @Test
     public void testSplitTrim() {
-        assertEquals(new ArrayList<String>(), HttpConnectionParser.splitTrim("", ','));
-        assertEquals(Arrays.asList("", ""), HttpConnectionParser.splitTrim(",", ','));
-        assertEquals(Arrays.asList("", "", ""), HttpConnectionParser.splitTrim(",,", ','));
-        assertEquals(Arrays.asList(""), HttpConnectionParser.splitTrim(" ", ','));
-        assertEquals(Arrays.asList("", ""), HttpConnectionParser.splitTrim(" , ", ','));
-        assertEquals(Arrays.asList("hello", "world"), HttpConnectionParser.splitTrim(" hello   ,world   ", ','));
+        assertEquals(new ArrayList<String>(), Strings.splitTrim("", ','));
+        assertEquals(Arrays.asList("", ""), Strings.splitTrim(",", ','));
+        assertEquals(Arrays.asList("", "", ""), Strings.splitTrim(",,", ','));
+        assertEquals(Arrays.asList(""), Strings.splitTrim(" ", ','));
+        assertEquals(Arrays.asList("", ""), Strings.splitTrim(" , ", ','));
+        assertEquals(Arrays.asList("hello", "world"), Strings.splitTrim(" hello   ,world   ", ','));
     }
 }
