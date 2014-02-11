@@ -13,6 +13,42 @@ class HttpConnectionParser {
     private static final Charset US_ASCII_CHARSET = Charset.forName("US-ASCII");
 
     /**
+     * This also handles bare '\n', which might be erroneously passed by some
+     * clients.
+     *
+     * @return true if lineBuf has leading CRLF.
+     */
+    public static boolean hasLeadingCrlf(ByteBuffer lineBuf) {
+        if (!lineBuf.hasRemaining()) {
+            return false;
+        }
+
+        lineBuf.mark();
+
+        boolean success = false;
+        do {
+            char ch = (char) lineBuf.get();
+            if (ch == '\n') {
+                // Handle bare newlines, as a precaution.
+                success = true;
+                break;
+            }
+
+            if (ch != '\r') {
+                break;
+            }
+
+            ch = (char) lineBuf.get();
+            if (ch == '\n') {
+                success = true;
+            }
+        } while (false);
+
+        lineBuf.reset();
+        return success;
+    }
+
+    /**
      * @return true if lineBuf has leading whitespace, which would
      * signal header value folding.
      */

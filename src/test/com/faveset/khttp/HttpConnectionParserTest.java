@@ -33,6 +33,20 @@ public class HttpConnectionParserTest {
     }
 
     @Test
+    public void testHasCrlf() {
+        assertTrue(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer("\n")));
+        assertTrue(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer("\r\n")));
+        assertFalse(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer(" \n")));
+        assertFalse(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer(" n")));
+        assertFalse(HttpConnectionParser.hasLeadingCrlf(makeByteBuffer(" \r\n")));
+
+        ByteBuffer buf = makeByteBuffer(" \r\n");
+        int oldPos = buf.position();
+        assertFalse(HttpConnectionParser.hasLeadingCrlf(buf));
+        assertEquals(oldPos, buf.position());
+    }
+
+    @Test
     public void testParseLine() {
         String testStr = "line1\nline2\r\n\nline3";
         ByteBuffer buf = ByteBuffer.wrap(testStr.getBytes(US_ASCII_CHARSET));
