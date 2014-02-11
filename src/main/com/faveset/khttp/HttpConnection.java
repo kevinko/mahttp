@@ -1,5 +1,6 @@
 // Copyright 2014, Kevin Ko <kevin@faveset.com>
 
+// TODO: handle multi-valued headers as a rare case.
 package com.faveset.khttp;
 
 import java.io.IOException;
@@ -15,6 +16,7 @@ class HttpConnection {
         // Request start line.
         REQUEST_START,
         REQUEST_HEADERS,
+        REQUEST_BODY,
         SERVER_ERROR,
     }
 
@@ -27,10 +29,14 @@ class HttpConnection {
 
     private HttpRequest mRequest;
 
+    // Name of the last parsed header.  Empty string if not yet encountered.
+    private String mLastHeaderName;
+
     public HttpConnection(Selector selector, SocketChannel chan) throws IOException {
         mConn = new NonBlockingConnection(selector, chan, BUFFER_SIZE);
         mState = State.REQUEST_START;
         mRequest = new HttpRequest();
+        mLastHeaderName = new String();
     }
 
     private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
@@ -41,6 +47,8 @@ class HttpConnection {
     }
 
     /**
+     * Performs one step for the state machine.
+     *
      * @return true if receiving is done and more data is needed.
      */
     private boolean handleStateStep(NonBlockingConnection conn, ByteBuffer buf) {
@@ -51,10 +59,33 @@ class HttpConnection {
                         // Continue reading.  The recv() is already persistent.
                         return true;
                     }
+
+                    // Clear header continuation, since we're seeing a new
+                    // set of headers.
+                    mLastHeaderName = new String();
+
                     mState = State.REQUEST_HEADERS;
                 } catch (InvalidRequestException e) {
                     mState = State.SERVER_ERROR;
                 }
+
+                break;
+
+            case REQUEST_HEADERS:
+                try {
+                    if (!parseRequestHeaders(buf, mRequest)) {
+                        return true;
+                    }
+
+                    mState = State.REQUEST_BODY;
+                } catch (InvalidRequestException e) {
+                    mState = State.SERVER_ERROR;
+                }
+
+                break;
+
+            case REQUEST_BODY:
+                // TODO
                 break;
 
             default:
@@ -63,6 +94,43 @@ class HttpConnection {
         }
 
         return false;
+    }
+
+    /**
+     * Parses a request header from buf and places the contents in req.
+     *
+     * This updates mLastHeaderName on success.
+     *
+     * @param lineBuf will be interpreted as a complete line and is typically
+     * provided via parseLine.
+     * @throws IllegalArgumentException if the header is malformed.
+     */
+    private void parseHeaderLine(ByteBuffer lineBuf, HttpRequest req) throws IllegalArgumentException {
+        String fieldName = HttpConnectionParser.parseToken(lineBuf);
+        if (fieldName.length() == 0 || !lineBuf.hasRemaining()) {
+            throw new IllegalArgumentException();
+        }
+
+        char ch = (char) lineBuf.get();
+        if (ch != ':') {
+            throw new IllegalArgumentException();
+        }
+
+        String v = parseHeaderValue(lineBuf);
+        req.addHeader(fieldName, v);
+
+        mLastHeaderName = fieldName;
+    }
+
+    /**
+     * @param valueBuf must be positioned at the start of the header value.
+     * Any preceding whitespace will be skipped.
+     *
+     * @return a String containing the trimmed value.
+     */
+    private static String parseHeaderValue(ByteBuffer valueBuf) {
+        HttpConnectionParser.skipWhitespace(valueBuf);
+        return HttpConnectionParser.parseText(valueBuf);
     }
 
     /**
@@ -79,7 +147,7 @@ class HttpConnection {
         try {
             lineBuf = HttpConnectionParser.parseLine(buf);
         } catch (BufferOverflowException e) {
-            throw new InvalidRequestException();
+            throw new InvalidRequestException("Request-Line exceeded buffer");
         }
 
         if (lineBuf == null) {
@@ -91,22 +159,64 @@ class HttpConnection {
             HttpRequest.Method method = HttpConnectionParser.parseMethod(lineBuf);
             req.setMethod(method);
         } catch (IllegalArgumentException e) {
-            throw new InvalidRequestException();
+            throw new InvalidRequestException("Unknown request method");
         }
 
         String reqUri = HttpConnectionParser.parseWord(lineBuf);
         if (reqUri.length() == 0) {
-            throw new InvalidRequestException();
+            throw new InvalidRequestException("Request is missing URI");
         }
         req.setUri(reqUri);
 
         int version = HttpConnectionParser.parseHttpVersion(lineBuf);
         if (version > 1) {
             // We only support HTTP/1.0 and HTTP/1.1.
-            throw new InvalidRequestException();
+            throw new InvalidRequestException("Unsupported HTTP version in request");
         }
 
         return true;
+    }
+
+    /**
+     * Parses a set of request headers from buf and populates req.
+     * mLastHeaderName will be updated as each header is parsed.
+     *
+     * @return false if more data is needed for reading into buf.  True if
+     * header parsing is complete.
+     *
+     * @throws InvalidRequestException on bad request.
+     */
+    private boolean parseRequestHeaders(ByteBuffer buf, HttpRequest req) throws InvalidRequestException {
+        ByteBuffer lineBuf;
+        try {
+            lineBuf = HttpConnectionParser.parseLine(buf);
+        } catch (BufferOverflowException e) {
+            throw new InvalidRequestException("Request-Line exceeded buffer");
+        }
+
+        if (HttpConnectionParser.hasLeadingSpace(lineBuf)) {
+            // Handle continuations.
+            if (mLastHeaderName.isEmpty()) {
+                throw new InvalidRequestException("Invalid request header continuation");
+            }
+            String value = parseHeaderValue(lineBuf);
+            req.addHeader(mLastHeaderName, value);
+            return false;
+        }
+
+        if (HttpConnectionParser.hasLeadingCrlf(lineBuf)) {
+            // We found the lone CRLF.  We're done.
+            return true;
+        }
+
+        try {
+            // This updates mLastHeaderName.
+            parseHeaderLine(lineBuf, mRequest);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidRequestException("could not parse header line");
+        }
+
+        return false;
     }
 
     /**
