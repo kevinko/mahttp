@@ -16,7 +16,7 @@ class HttpConnection {
         // Request start line.
         REQUEST_START,
         REQUEST_HEADERS,
-        REQUEST_BODY,
+        MESSAGE_BODY,
         SERVER_ERROR,
     }
 
@@ -32,11 +32,19 @@ class HttpConnection {
     // Name of the last parsed header.  Empty string if not yet encountered.
     private String mLastHeaderName;
 
+    // The error code to report, if encountered when processing a request.
+    private int mErrorCode;
+
     public HttpConnection(Selector selector, SocketChannel chan) throws IOException {
         mConn = new NonBlockingConnection(selector, chan, BUFFER_SIZE);
         mState = State.REQUEST_START;
         mRequest = new HttpRequest();
         mLastHeaderName = new String();
+    }
+
+    private boolean handleBody(NonBlockingConnection conn, HttpRequest req, ByteBuffer buf) throws InvalidRequestException {
+        // TODO
+        return false;
     }
 
     private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
@@ -77,15 +85,26 @@ class HttpConnection {
                         return true;
                     }
 
-                    mState = State.REQUEST_BODY;
+                    mState = State.MESSAGE_BODY;
                 } catch (InvalidRequestException e) {
                     mState = State.SERVER_ERROR;
                 }
 
                 break;
 
-            case REQUEST_BODY:
-                // TODO
+            case MESSAGE_BODY:
+                try {
+                    if (!handleBody(conn, mRequest, buf)) {
+                        return true;
+                    }
+
+                    // Handle pipelining.
+                    mState = State.REQUEST_START;
+
+                } catch (InvalidRequestException e) {
+                    mState = State.SERVER_ERROR;
+                }
+
                 break;
 
             default:
@@ -147,7 +166,7 @@ class HttpConnection {
         try {
             lineBuf = HttpConnectionParser.parseLine(buf);
         } catch (BufferOverflowException e) {
-            throw new InvalidRequestException("Request-Line exceeded buffer");
+            throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.RequestURITooLong);
         }
 
         if (lineBuf == null) {
@@ -159,19 +178,19 @@ class HttpConnection {
             HttpRequest.Method method = HttpConnectionParser.parseMethod(lineBuf);
             req.setMethod(method);
         } catch (IllegalArgumentException e) {
-            throw new InvalidRequestException("Unknown request method");
+            throw new InvalidRequestException("Unknown request method", HttpStatus.NotImplemented);
         }
 
         String reqUri = HttpConnectionParser.parseWord(lineBuf);
         if (reqUri.length() == 0) {
-            throw new InvalidRequestException("Request is missing URI");
+            throw new InvalidRequestException("Request is missing URI", HttpStatus.BadRequest);
         }
         req.setUri(reqUri);
 
         int version = HttpConnectionParser.parseHttpVersion(lineBuf);
         if (version > 1) {
             // We only support HTTP/1.0 and HTTP/1.1.
-            throw new InvalidRequestException("Unsupported HTTP version in request");
+            throw new InvalidRequestException("Unsupported HTTP version in request", HttpStatus.NotImplemented);
         }
 
         return true;
@@ -191,13 +210,13 @@ class HttpConnection {
         try {
             lineBuf = HttpConnectionParser.parseLine(buf);
         } catch (BufferOverflowException e) {
-            throw new InvalidRequestException("Request-Line exceeded buffer");
+            throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.RequestURITooLong);
         }
 
         if (HttpConnectionParser.hasLeadingSpace(lineBuf)) {
             // Handle continuations.
             if (mLastHeaderName.isEmpty()) {
-                throw new InvalidRequestException("Invalid request header continuation");
+                throw new InvalidRequestException("Invalid request header continuation", HttpStatus.BadRequest);
             }
             String value = parseHeaderValue(lineBuf);
             req.addHeader(mLastHeaderName, value);
@@ -213,10 +232,20 @@ class HttpConnection {
             // This updates mLastHeaderName.
             parseHeaderLine(lineBuf, mRequest);
         } catch (IllegalArgumentException e) {
-            throw new InvalidRequestException("could not parse header line");
+            throw new InvalidRequestException("could not parse header line", HttpStatus.BadRequest);
         }
 
         return false;
+    }
+
+    /**
+     * Resets the connection state for a new request.
+     */
+    private void reset() {
+        mState = State.REQUEST_START;
+        mRequest.clearHeaders();
+        mLastHeaderName = new String();
+        mErrorCode = 0;
     }
 
     /**
