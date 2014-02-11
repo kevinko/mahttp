@@ -7,7 +7,8 @@ import java.nio.ByteBuffer;
 
 class RequestStartHandler implements StateHandler {
     /**
-     * @param state will be prepared for the header parsing stage.
+     * @param conn is not used currently.
+     * @param state will be reset for the header parsing stage on success.
      *
      * @throws InvalidRequestException on bad request.
      * @return true if enough data existed in the buffer to parse a request
@@ -55,8 +56,7 @@ class RequestStartHandler implements StateHandler {
                 throw new InvalidRequestException("Could not parse HTTP version", HttpStatus.BadRequest);
         }
 
-        // Prepare for header parsing.
-        state.setLastHeaderName("");
+        state.reset();
 
         return true;
     }
