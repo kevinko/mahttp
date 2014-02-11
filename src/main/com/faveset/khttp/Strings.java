@@ -170,27 +170,27 @@ class Strings {
 
     /**
      * @return the http version (0 for 1.0 or 1 for 1.1).
-     * @throws IllegalArgumentException on error.
+     * @throws ParseException on error.
      */
-    public static int parseHttpVersion(ByteBuffer buf) throws IllegalArgumentException {
+    public static int parseHttpVersion(ByteBuffer buf) throws ParseException {
         String word = parseWord(buf);
         if (word.length() == 0) {
-            throw new IllegalArgumentException();
+            throw new ParseException();
         }
         if (!word.startsWith("HTTP/1.")) {
-            throw new IllegalArgumentException();
+            throw new ParseException();
         }
         String minorVersionStr = word.substring(7);
         return Integer.parseInt(minorVersionStr);
     }
 
     /**
-     * @throws IllegalArgumentException if the method name is unknown.
+     * @throws ParseException if the method name is unknown.
      */
-    public static HttpRequest.Method parseMethod(ByteBuffer buf) throws IllegalArgumentException {
+    public static HttpRequest.Method parseMethod(ByteBuffer buf) throws ParseException {
         String methodStr = parseWord(buf);
         if (methodStr.length() == 0) {
-            throw new IllegalArgumentException();
+            throw new ParseException();
         }
         return HttpRequest.Method.valueOf(methodStr);
     }

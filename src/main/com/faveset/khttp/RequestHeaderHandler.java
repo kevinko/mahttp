@@ -48,7 +48,7 @@ class RequestHeaderHandler implements StateHandler {
         try {
             // This updates mLastHeaderName.
             parseHeaderLine(lineBuf, state);
-        } catch (IllegalArgumentException e) {
+        } catch (ParseException e) {
             throw new InvalidRequestException("could not parse header line", HttpStatus.BadRequest);
         }
 
@@ -62,19 +62,19 @@ class RequestHeaderHandler implements StateHandler {
      *
      * @param lineBuf will be interpreted as a complete line and is typically
      * provided via parseLine.
-     * @throws IllegalArgumentException if the header is malformed.
+     * @throws ParseException if the header is malformed.
      */
-    private void parseHeaderLine(ByteBuffer lineBuf, HandlerState state) throws IllegalArgumentException {
+    private void parseHeaderLine(ByteBuffer lineBuf, HandlerState state) throws ParseException {
         HttpRequest req = state.getRequest();
 
         String fieldName = Strings.parseToken(lineBuf);
         if (fieldName.length() == 0 || !lineBuf.hasRemaining()) {
-            throw new IllegalArgumentException();
+            throw new ParseException("Could not parse header name");
         }
 
         char ch = (char) lineBuf.get();
         if (ch != ':') {
-            throw new IllegalArgumentException();
+            throw new ParseException("Could not parse header separator");
         }
 
         String v = parseHeaderValue(lineBuf);

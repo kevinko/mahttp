@@ -35,7 +35,7 @@ class RequestStartHandler implements StateHandler {
         try {
             HttpRequest.Method method = Strings.parseMethod(lineBuf);
             req.setMethod(method);
-        } catch (IllegalArgumentException e) {
+        } catch (ParseException e) {
             throw new InvalidRequestException("Unknown request method", HttpStatus.NotImplemented);
         }
 
@@ -51,7 +51,7 @@ class RequestStartHandler implements StateHandler {
                 // We only support HTTP/1.0 and HTTP/1.1.
                 throw new InvalidRequestException("Unsupported HTTP version in request", HttpStatus.NotImplemented);
             }
-        } catch (IllegalArgumentException e) {
+        } catch (ParseException e) {
                 throw new InvalidRequestException("Could not parse HTTP version", HttpStatus.BadRequest);
         }
 
