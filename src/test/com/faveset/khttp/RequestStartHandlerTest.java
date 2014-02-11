@@ -22,12 +22,14 @@ public class RequestStartHandlerTest {
         HandlerState state = new HandlerState();
         HttpRequest req = state.getRequest();
         req.addHeader("foo", "bar");
+        state.setLastHeaderName("foo");
 
         RequestStartHandler handler = new RequestStartHandler();
         assertTrue(handler.handleState(null, buf, state));
 
         // Headers should be cleared.
         assertEquals(null, req.getHeader("foo"));
+        assertEquals("", state.getLastHeaderName());
     }
 
     @Test(expected=InvalidRequestException.class)
