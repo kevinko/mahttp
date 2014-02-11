@@ -3,7 +3,7 @@
 package com.faveset.khttp;
 
 class InvalidRequestException extends Exception {
-    public InvalidRequestException() {
-        super();
+    public InvalidRequestException(String reason) {
+        super(reason);
     }
 }
