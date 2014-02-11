@@ -19,7 +19,7 @@ class RequestHeaderHandler implements StateHandler {
      * @throws InvalidRequestException on bad request.
      */
     public boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
-        HttpRequest req = state.getRequest();
+        HttpRequestBuilder req = state.getRequestBuilder();
 
         if (Strings.hasLeadingCrlf(buf)) {
             // We found the lone CRLF.  We're done.
@@ -40,11 +40,15 @@ class RequestHeaderHandler implements StateHandler {
 
         if (Strings.hasLeadingSpace(lineBuf)) {
             // Handle continuations.
-            if (state.getLastHeaderName().isEmpty()) {
+            String lastHeaderName = state.getLastHeaderName();
+            if (lastHeaderName.isEmpty()) {
                 throw new InvalidRequestException("Invalid request header continuation", HttpStatus.BadRequest);
             }
-            String value = parseHeaderValue(lineBuf);
-            req.addHeader(state.getLastHeaderName(), value);
+
+            String addedValue = parseHeaderValue(lineBuf);
+
+            // Append to the last added header value.
+            req.appendHeaderValue(lastHeaderName, addedValue);
             return false;
         }
 
@@ -68,7 +72,7 @@ class RequestHeaderHandler implements StateHandler {
      * @throws ParseException if the header is malformed.
      */
     private void parseHeaderLine(ByteBuffer lineBuf, HandlerState state) throws ParseException {
-        HttpRequest req = state.getRequest();
+        HttpRequestBuilder req = state.getRequestBuilder();
 
         String fieldName = Strings.parseToken(lineBuf);
         if (fieldName.length() == 0 || !lineBuf.hasRemaining()) {

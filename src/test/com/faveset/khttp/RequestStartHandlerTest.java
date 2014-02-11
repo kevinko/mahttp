@@ -20,7 +20,7 @@ public class RequestStartHandlerTest {
         ByteBuffer buf = Helper.makeByteBuffer("GET / HTTP/1.1\n");
 
         HandlerState state = new HandlerState();
-        HttpRequest req = state.getRequest();
+        HttpRequestBuilder req = state.getRequestBuilder();
         req.addHeader("foo", "bar");
         state.setLastHeaderName("foo");
 

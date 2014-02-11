@@ -18,32 +18,14 @@ class HttpRequest {
         CONNECT
     }
 
-    private Method mMethod;
+    protected Method mMethod;
 
-    private String mUri;
+    protected String mUri;
 
-    private HashMap<String, List<String>> mHeaders;
+    protected HashMap<String, List<String>> mHeaders;
 
     public HttpRequest() {
         mHeaders = new HashMap<String, List<String>>();
-    }
-
-    /**
-     * Appends value to the mapping list for name, creating a mapping if
-     * necessary.
-     */
-    public void addHeader(String name, String value) {
-        List<String> l = mHeaders.get(name);
-        if (l == null) {
-            l = new ArrayList<String>();
-            mHeaders.put(name, l);
-        }
-
-        l.add(value);
-    }
-
-    public void clearHeaders() {
-        mHeaders.clear();
     }
 
     /**
@@ -72,32 +54,5 @@ class HttpRequest {
 
     public String getUri() {
         return mUri;
-    }
-
-    /**
-     * Assigns value to the mapping for name.  This clears any existing list
-     * values.
-     */
-    public void setHeader(String name, String value) {
-        List<String> l = new ArrayList<String>();
-        l.add(value);
-
-        mHeaders.put(name, l);
-    }
-
-    /**
-     * Assigns value to the mapping for name.  This overwrites any existing
-     * mapping.
-     */
-    public void setHeaderList(String name, List<String> values) {
-        mHeaders.put(name, values);
-    }
-
-    public void setMethod(Method method) {
-        mMethod = method;
-    }
-
-    public void setUri(String uri) {
-        mUri = uri;
     }
 }

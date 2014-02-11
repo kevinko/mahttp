@@ -3,12 +3,12 @@
 package com.faveset.khttp;
 
 class HandlerState {
-    private HttpRequest mReq;
+    private HttpRequestBuilder mReq;
 
     private String mLastHeaderName;
 
     public HandlerState() {
-        mReq = new HttpRequest();
+        mReq = new HttpRequestBuilder();
     }
 
     /**
@@ -19,7 +19,7 @@ class HandlerState {
         return mLastHeaderName;
     }
 
-    public HttpRequest getRequest() {
+    public HttpRequestBuilder getRequestBuilder() {
         return mReq;
     }
 

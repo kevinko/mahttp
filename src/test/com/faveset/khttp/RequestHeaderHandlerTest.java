@@ -23,15 +23,15 @@ public class RequestHeaderHandlerTest {
         RequestHeaderHandler handler = new RequestHeaderHandler();
         assertFalse(handler.handleState(null, buf, state));
 
-        assertEquals(1, state.getRequest().getHeader("hello").size());
-        assertEquals("world", state.getRequest().getHeaderFirst("hello"));
+        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
+        assertEquals("world", state.getRequestBuilder().getHeaderFirst("hello"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer("foo: bar\r\n"));
         buf.flip();
         assertFalse(handler.handleState(null, buf, state));
-        assertEquals(1, state.getRequest().getHeader("foo").size());
-        assertEquals("bar", state.getRequest().getHeaderFirst("foo"));
+        assertEquals(1, state.getRequestBuilder().getHeader("foo").size());
+        assertEquals("bar", state.getRequestBuilder().getHeaderFirst("foo"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer("\n"));
