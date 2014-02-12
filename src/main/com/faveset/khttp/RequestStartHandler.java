@@ -25,7 +25,7 @@ class RequestStartHandler implements StateHandler {
         try {
             lineBuf = Strings.parseLine(buf);
         } catch (BufferOverflowException e) {
-            throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.RequestURITooLong);
+            throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.REQUEST_URI_TOO_LONG);
         }
 
         if (lineBuf == null) {
@@ -37,12 +37,12 @@ class RequestStartHandler implements StateHandler {
             HttpRequest.Method method = Strings.parseMethod(lineBuf);
             req.setMethod(method);
         } catch (ParseException e) {
-            throw new InvalidRequestException("Unknown request method", HttpStatus.NotImplemented);
+            throw new InvalidRequestException("Unknown request method", HttpStatus.NOT_IMPLEMENTED);
         }
 
         String reqUri = Strings.parseWord(lineBuf);
         if (reqUri.length() == 0) {
-            throw new InvalidRequestException("Request is missing URI", HttpStatus.BadRequest);
+            throw new InvalidRequestException("Request is missing URI", HttpStatus.BAD_REQUEST);
         }
         req.setUri(reqUri);
 
@@ -50,10 +50,10 @@ class RequestStartHandler implements StateHandler {
             int version = Strings.parseHttpVersion(lineBuf);
             if (version > 1) {
                 // We only support HTTP/1.0 and HTTP/1.1.
-                throw new InvalidRequestException("Unsupported HTTP version in request", HttpStatus.NotImplemented);
+                throw new InvalidRequestException("Unsupported HTTP version in request", HttpStatus.NOT_IMPLEMENTED);
             }
         } catch (ParseException e) {
-                throw new InvalidRequestException("Could not parse HTTP version", HttpStatus.BadRequest);
+                throw new InvalidRequestException("Could not parse HTTP version", HttpStatus.BAD_REQUEST);
         }
 
         state.reset();

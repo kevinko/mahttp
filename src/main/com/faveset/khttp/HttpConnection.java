@@ -78,7 +78,7 @@ class HttpConnection {
         StateEntry entry = mStateHandlerMap.get(mState);
         if (entry == null) {
             // Unknown state.
-            mErrorCode = HttpStatus.InternalServerError;
+            mErrorCode = HttpStatus.INTERNAL_SERVER_ERROR;
             mState = State.SERVER_ERROR;
             return false;
         }
@@ -123,5 +123,7 @@ class HttpConnection {
                 new StateEntry(State.REQUEST_HEADERS, new RequestStartHandler()));
         mStateHandlerMap.put(State.REQUEST_HEADERS,
                 new StateEntry(State.MESSAGE_BODY, new RequestHeaderHandler()));
+        mStateHandlerMap.put(State.MESSAGE_BODY,
+                new StateEntry(State.REQUEST_START, new MessageBodyHandler()));
     }
 };

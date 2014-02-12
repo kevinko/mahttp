@@ -30,7 +30,7 @@ class RequestHeaderHandler implements StateHandler {
         try {
             lineBuf = Strings.parseLine(buf);
         } catch (BufferOverflowException e) {
-            throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.RequestURITooLong);
+            throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.REQUEST_URI_TOO_LONG);
         }
 
         if (lineBuf == null) {
@@ -42,7 +42,7 @@ class RequestHeaderHandler implements StateHandler {
             // Handle continuations.
             String lastHeaderName = state.getLastHeaderName();
             if (lastHeaderName.isEmpty()) {
-                throw new InvalidRequestException("Invalid request header continuation", HttpStatus.BadRequest);
+                throw new InvalidRequestException("Invalid request header continuation", HttpStatus.BAD_REQUEST);
             }
 
             String addedValue = parseHeaderValue(lineBuf);
@@ -56,7 +56,7 @@ class RequestHeaderHandler implements StateHandler {
             // This updates mLastHeaderName.
             parseHeaderLine(lineBuf, state);
         } catch (ParseException e) {
-            throw new InvalidRequestException("could not parse header line", HttpStatus.BadRequest);
+            throw new InvalidRequestException("could not parse header line", HttpStatus.BAD_REQUEST);
         }
 
         return false;
