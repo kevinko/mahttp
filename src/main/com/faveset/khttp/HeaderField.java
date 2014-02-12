@@ -50,4 +50,16 @@ class HeaderField {
         public static final String TE = "TE";
         public static final String USER_AGENT = "User-Agent";
     }
+
+    public static class Response {
+        public static final String ACCEPT_RANGES = "Accept-Ranges";
+        public static final String AGE = "Age";
+        public static final String ETAG = "ETag";
+        public static final String LOCATION = "Location";
+        public static final String PROXY_AUTHENTICATE = "Proxy-Authenticate";
+        public static final String RETRY_AFTER = "Retry-After";
+        public static final String SERVER = "Server";
+        public static final String VARY = "Vary";
+        public static final String WWW_AUTHENTICATE = "WWW-Authenticate";
+    }
 }
