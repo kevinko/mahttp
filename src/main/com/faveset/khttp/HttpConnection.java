@@ -90,6 +90,7 @@ class HttpConnection {
             }
             mState = entry.getNextState();
         } catch (InvalidRequestException e) {
+            mErrorCode = e.getErrorCode();
             mState = State.SERVER_ERROR;
         }
 
