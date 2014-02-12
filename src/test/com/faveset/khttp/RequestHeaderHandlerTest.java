@@ -39,8 +39,6 @@ public class RequestHeaderHandlerTest {
         assertTrue(handler.handleState(null, buf, state));
     }
 
-    // TODO: test partial.
-
     @Test
     public void testContinuation() throws InvalidRequestException {
         ByteBuffer buf = Helper.makeByteBuffer("hello: world\n");
@@ -59,6 +57,46 @@ public class RequestHeaderHandlerTest {
 
         assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
         assertEquals("world hi?", state.getRequestBuilder().getHeaderFirst("hello"));
+
+        buf.clear();
+        buf.put(Helper.makeByteBuffer(" ah!\n"));
+        buf.flip();
+        assertFalse(handler.handleState(null, buf, state));
+
+        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
+        assertEquals("world hi? ah!", state.getRequestBuilder().getHeaderFirst("hello"));
+
+        buf.clear();
+        buf.put(Helper.makeByteBuffer("foo: bar!\n"));
+        buf.flip();
+        assertFalse(handler.handleState(null, buf, state));
+
+        assertEquals(1, state.getRequestBuilder().getHeader("foo").size());
+        assertEquals("bar!", state.getRequestBuilder().getHeaderFirst("foo"));
+
+        buf.clear();
+        buf.put(Helper.makeByteBuffer("\n"));
+        buf.flip();
+        assertTrue(handler.handleState(null, buf, state));
+    }
+
+    @Test
+    public void testPartial() throws InvalidRequestException {
+        ByteBuffer buf = ByteBuffer.allocate(1024);
+        buf.put(Helper.makeByteBuffer("hello: wor"));
+        buf.flip();
+
+        HandlerState state = new HandlerState();
+
+        RequestHeaderHandler handler = new RequestHeaderHandler();
+        assertFalse(handler.handleState(null, buf, state));
+
+        buf.put(Helper.makeByteBuffer("ld\r\n"));
+        buf.flip();
+        assertFalse(handler.handleState(null, buf, state));
+
+        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
+        assertEquals("world", state.getRequestBuilder().getHeaderFirst("hello"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer("\n"));
