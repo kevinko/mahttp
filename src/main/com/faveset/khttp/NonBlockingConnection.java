@@ -25,7 +25,7 @@ class NonBlockingConnection {
     }
 
     /**
-     * buf is the out buffer that can be used for writing more data.
+     * buf is the internal out buffer that can be used for writing more data.
      */
     public interface OnSendCallback {
         void onSend(NonBlockingConnection conn, ByteBuffer buf);
@@ -35,7 +35,12 @@ class NonBlockingConnection {
     private SelectionKey mKey;
 
     private ByteBuffer mInBuffer;
+
+    // The outbuffer is mOutBufferInternal initially and can be temporarily
+    // changed using various send methods.
     private ByteBuffer mOutBuffer;
+
+    private ByteBuffer mOutBufferInternal;
 
     private OnCloseCallback mOnCloseCallback;
 
@@ -43,6 +48,9 @@ class NonBlockingConnection {
     // with the Selector.
     private OnRecvCallback mOnRecvCallback;
     private OnSendCallback mOnSendCallback;
+
+    // We're using an alternative buffer.
+    private boolean mIsBufferSend;
 
     private boolean mIsPartialSend;
 
@@ -57,7 +65,8 @@ class NonBlockingConnection {
         mKey = mChan.register(selector, 0);
 
         mInBuffer = ByteBuffer.allocateDirect(bufferSize);
-        mOutBuffer = ByteBuffer.allocateDirect(bufferSize);
+        mOutBufferInternal = ByteBuffer.allocateDirect(bufferSize);
+        mOutBuffer = mOutBufferInternal;
     }
 
     /**
@@ -102,6 +111,9 @@ class NonBlockingConnection {
         return mInBuffer;
     }
 
+    /**
+     * @return the current send buffer.
+     */
     public ByteBuffer getOutBuffer() {
         return mOutBuffer;
     }
@@ -144,6 +156,12 @@ class NonBlockingConnection {
                 cancelSend();
             }
             return;
+        }
+
+        if (mIsBufferSend) {
+            // Restore the buffer.
+            mOutBuffer = mOutBufferInternal;
+            mIsBufferSend = false;
         }
 
         if (mOnSendCallback != null) {
@@ -201,6 +219,21 @@ class NonBlockingConnection {
      * persistent.
      */
     public void send(OnSendCallback callback) {
+        sendImpl(callback, false);
+    }
+
+    /**
+     * A variant of send that uses the contents of buf instead of the built-in
+     * buffer.  (This is useful for sending MappedByteBuffers.)
+     *
+     * One must not manipulate the buffer while a send is in progress.
+     *
+     * @param callback will be called on completion.
+     */
+    public void sendBuffer(OnSendCallback callback, ByteBuffer buf) {
+        mIsBufferSend = true;
+        mOutBuffer = buf;
+
         sendImpl(callback, false);
     }
 
