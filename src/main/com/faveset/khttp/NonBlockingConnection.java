@@ -224,9 +224,11 @@ class NonBlockingConnection {
 
     /**
      * A variant of send that uses the contents of buf instead of the built-in
-     * buffer.  (This is useful for sending MappedByteBuffers.)
+     * buffer.  (This is useful for sending MappedByteBuffers.)  The callback
+     * is not persistent.
      *
-     * One must not manipulate the buffer while a send is in progress.
+     * One must not manipulate the buffer while a send is in progress.  This
+     * must not be called via a sendPartial callback.
      *
      * @param callback will be called on completion.
      */
@@ -241,6 +243,8 @@ class NonBlockingConnection {
      * Schedules the contents of the out buffer for sending.  Callback will
      * be called as soon data has been sent from the buffer.  This is not
      * persistent.
+     *
+     * sendBuffer must not be called during callback.
      */
     public void sendPartial(OnSendCallback callback) {
         sendImpl(callback, true);
