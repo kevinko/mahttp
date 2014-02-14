@@ -2,7 +2,11 @@
 
 package com.faveset.khttp;
 
+import java.nio.BufferOverflowException;
+import java.nio.ByteBuffer;
+
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -11,6 +15,14 @@ import java.util.Map;
  * Represents the key-value pairs in an HTTP headers.
  */
 public class Headers {
+    private static final byte[] sCrlfBytes = { (byte) '\r', (byte) '\n' };
+
+    // Holds the characters representing the delimiter between header key and
+    // value.
+    private static final byte[] sHeaderDelimBytes = { (byte) ':', (byte) ' ' };
+    // Used to delimit multiple header values.
+    private static final byte sHeaderValueDelim = (byte) ',';
+
     protected HashMap<String, List<String>> mHeaders;
 
     public Headers() {
@@ -58,5 +70,58 @@ public class Headers {
             return null;
         }
         return l.get(0);
+    }
+
+    /**
+     * @return the header map as a string in wire format.
+     */
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        writeString(builder);
+        return builder.toString();
+    }
+
+    /**
+     * Writes the headers in (HTTP) wire format to buf.
+     */
+    public void write(ByteBuffer buf) throws BufferOverflowException {
+        for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
+            buf.put(entry.getKey().getBytes(Strings.US_ASCII_CHARSET));
+            buf.put(sHeaderDelimBytes);
+            writeValue(buf, entry.getValue());
+
+            buf.put(sCrlfBytes);
+        }
+    }
+
+    /**
+     * Write the headers in (HTTP) wire format to the StringBuilder.
+     */
+    public void writeString(StringBuilder builder) {
+        for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
+            builder.append(entry.getKey());
+            builder.append(": ");
+            String v = Strings.join(entry.getValue(), ",");
+            builder.append(v);
+
+            builder.append("\r\n");
+        }
+    }
+
+    /**
+     * Writes the values as a comma-separated list to buf.
+     */
+    private void writeValue(ByteBuffer buf, List<String> values) throws BufferOverflowException {
+        if (values.size() == 0) {
+            return;
+        }
+
+        Iterator<String> iter = values.iterator();
+        buf.put(iter.next().getBytes(Strings.US_ASCII_CHARSET));
+
+        while (iter.hasNext()) {
+            buf.put(sHeaderValueDelim);
+            buf.put(iter.next().getBytes(Strings.US_ASCII_CHARSET));
+        }
     }
 }
