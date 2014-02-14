@@ -21,14 +21,15 @@ public class RequestStartHandlerTest {
 
         HandlerState state = new HandlerState();
         HttpRequestBuilder req = state.getRequestBuilder();
-        req.addHeader("foo", "bar");
+        HeadersBuilder headers = req.getHeadersBuilder();
+        headers.add("foo", "bar");
         state.setLastHeaderName("foo");
 
         RequestStartHandler handler = new RequestStartHandler();
         assertTrue(handler.handleState(null, buf, state));
 
         // Headers should be cleared.
-        assertEquals(null, req.getHeader("foo"));
+        assertEquals(null, headers.get("foo"));
         assertEquals("", state.getLastHeaderName());
     }
 

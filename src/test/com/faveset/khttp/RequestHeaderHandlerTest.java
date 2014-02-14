@@ -19,19 +19,20 @@ public class RequestHeaderHandlerTest {
     public void testSimple() throws InvalidRequestException {
         ByteBuffer buf = Helper.makeByteBuffer("hello: world\n");
         HandlerState state = new HandlerState();
+        HeadersBuilder headers = state.getRequestBuilder().getHeadersBuilder();
 
         RequestHeaderHandler handler = new RequestHeaderHandler();
         assertFalse(handler.handleState(null, buf, state));
 
-        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
-        assertEquals("world", state.getRequestBuilder().getHeaderFirst("hello"));
+        assertEquals(1, headers.get("hello").size());
+        assertEquals("world", headers.getFirst("hello"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer("foo: bar\r\n"));
         buf.flip();
         assertFalse(handler.handleState(null, buf, state));
-        assertEquals(1, state.getRequestBuilder().getHeader("foo").size());
-        assertEquals("bar", state.getRequestBuilder().getHeaderFirst("foo"));
+        assertEquals(1, headers.get("foo").size());
+        assertEquals("bar", headers.getFirst("foo"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer("\n"));
@@ -43,36 +44,37 @@ public class RequestHeaderHandlerTest {
     public void testContinuation() throws InvalidRequestException {
         ByteBuffer buf = Helper.makeByteBuffer("hello: world\n");
         HandlerState state = new HandlerState();
+        HeadersBuilder headers = state.getRequestBuilder().getHeadersBuilder();
 
         RequestHeaderHandler handler = new RequestHeaderHandler();
         assertFalse(handler.handleState(null, buf, state));
 
-        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
-        assertEquals("world", state.getRequestBuilder().getHeaderFirst("hello"));
+        assertEquals(1, headers.get("hello").size());
+        assertEquals("world", headers.getFirst("hello"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer(" hi?\n"));
         buf.flip();
         assertFalse(handler.handleState(null, buf, state));
 
-        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
-        assertEquals("world hi?", state.getRequestBuilder().getHeaderFirst("hello"));
+        assertEquals(1, headers.get("hello").size());
+        assertEquals("world hi?", headers.getFirst("hello"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer(" ah!\n"));
         buf.flip();
         assertFalse(handler.handleState(null, buf, state));
 
-        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
-        assertEquals("world hi? ah!", state.getRequestBuilder().getHeaderFirst("hello"));
+        assertEquals(1, headers.get("hello").size());
+        assertEquals("world hi? ah!", headers.getFirst("hello"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer("foo: bar!\n"));
         buf.flip();
         assertFalse(handler.handleState(null, buf, state));
 
-        assertEquals(1, state.getRequestBuilder().getHeader("foo").size());
-        assertEquals("bar!", state.getRequestBuilder().getHeaderFirst("foo"));
+        assertEquals(1, headers.get("foo").size());
+        assertEquals("bar!", headers.getFirst("foo"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer("\n"));
@@ -87,6 +89,7 @@ public class RequestHeaderHandlerTest {
         buf.flip();
 
         HandlerState state = new HandlerState();
+        HeadersBuilder headers = state.getRequestBuilder().getHeadersBuilder();
 
         RequestHeaderHandler handler = new RequestHeaderHandler();
         assertFalse(handler.handleState(null, buf, state));
@@ -95,8 +98,8 @@ public class RequestHeaderHandlerTest {
         buf.flip();
         assertFalse(handler.handleState(null, buf, state));
 
-        assertEquals(1, state.getRequestBuilder().getHeader("hello").size());
-        assertEquals("world", state.getRequestBuilder().getHeaderFirst("hello"));
+        assertEquals(1, headers.get("hello").size());
+        assertEquals("world", headers.getFirst("hello"));
 
         buf.clear();
         buf.put(Helper.makeByteBuffer("\n"));

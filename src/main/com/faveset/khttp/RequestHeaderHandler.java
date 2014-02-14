@@ -48,7 +48,7 @@ class RequestHeaderHandler implements StateHandler {
             String addedValue = parseHeaderValue(lineBuf);
 
             // Append to the last added header value.
-            req.appendHeaderValue(lastHeaderName, addedValue);
+            req.getHeadersBuilder().appendValue(lastHeaderName, addedValue);
             return false;
         }
 
@@ -85,7 +85,7 @@ class RequestHeaderHandler implements StateHandler {
         }
 
         String v = parseHeaderValue(lineBuf);
-        req.addHeader(fieldName, v);
+        req.getHeadersBuilder().add(fieldName, v);
 
         state.setLastHeaderName(fieldName);
     }
