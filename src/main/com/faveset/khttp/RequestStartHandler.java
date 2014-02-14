@@ -56,7 +56,7 @@ class RequestStartHandler implements StateHandler {
                 throw new InvalidRequestException("Could not parse HTTP version", HttpStatus.BAD_REQUEST);
         }
 
-        state.reset();
+        state.clear();
 
         return true;
     }

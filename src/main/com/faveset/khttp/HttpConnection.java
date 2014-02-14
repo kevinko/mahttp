@@ -102,7 +102,7 @@ class HttpConnection {
      */
     private void reset() {
         mState = State.REQUEST_START;
-        mHandlerState.reset();
+        mHandlerState.clear();
         mErrorCode = 0;
     }
 
