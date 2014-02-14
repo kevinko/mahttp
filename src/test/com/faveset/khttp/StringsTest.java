@@ -52,7 +52,7 @@ public class StringsTest {
         Helper.compare(result, "");
 
         result = Strings.parseLine(buf);
-        assertEquals(result, null);
+        assertEquals(null, result);
         ByteBuffer cmp = buf.duplicate();
         cmp.flip();
         Helper.compare(cmp, "line3");
@@ -68,7 +68,7 @@ public class StringsTest {
         Helper.compare(result, "line3line3b");
 
         result = Strings.parseLine(buf);
-        assertEquals(result, null);
+        assertEquals(null, result);
         cmp = buf.duplicate();
         cmp.flip();
         Helper.compare(cmp, "line4");
@@ -87,27 +87,27 @@ public class StringsTest {
     public void testParseWord() {
         String testStr = "\n\r \tword1 word2  word3";
         ByteBuffer buf = ByteBuffer.wrap(testStr.getBytes(Helper.US_ASCII_CHARSET));
-        assertEquals(Strings.parseWord(buf), "word1");
-        assertEquals(Strings.parseWord(buf), "word2");
-        assertEquals(Strings.parseWord(buf), "word3");
-        assertEquals(Strings.parseWord(buf), "");
+        assertEquals("word1", Strings.parseWord(buf));
+        assertEquals("word2", Strings.parseWord(buf));
+        assertEquals("word3", Strings.parseWord(buf));
+        assertEquals("", Strings.parseWord(buf));
 
         testStr = "word1\n";
         buf = ByteBuffer.wrap(testStr.getBytes(Helper.US_ASCII_CHARSET));
-        assertEquals(Strings.parseWord(buf), "word1");
-        assertEquals(Strings.parseWord(buf), "");
+        assertEquals("word1", Strings.parseWord(buf));
+        assertEquals("", Strings.parseWord(buf));
     }
 
     @Test
     public void testParseVersion() throws ParseException {
         ByteBuffer buf = Helper.makeByteBuffer("HTTP/1.0");
-        assertEquals(Strings.parseHttpVersion(buf), 0);
+        assertEquals(0, Strings.parseHttpVersion(buf));
 
         buf = Helper.makeByteBuffer("HTTP/1.1");
-        assertEquals(Strings.parseHttpVersion(buf), 1);
+        assertEquals(1, Strings.parseHttpVersion(buf));
 
         buf = Helper.makeByteBuffer("HTTP/1.12");
-        assertEquals(Strings.parseHttpVersion(buf), 12);
+        assertEquals(12, Strings.parseHttpVersion(buf));
     }
 
     @Test(expected=ParseException.class)
@@ -119,39 +119,39 @@ public class StringsTest {
     @Test
     public void testParseText() {
         ByteBuffer buf = Helper.makeByteBuffer("Hello: world");
-        assertEquals(Strings.parseText(buf), "Hello: world");
+        assertEquals("Hello: world", Strings.parseText(buf));
         assertFalse(buf.hasRemaining());
 
         buf = Helper.makeByteBuffer("Hello: world\037");
-        assertEquals(Strings.parseText(buf), "Hello: world");
-        assertEquals(buf.get(), '\037');
+        assertEquals("Hello: world", Strings.parseText(buf));
+        assertEquals('\037', buf.get());
     }
 
     @Test
     public void testParseToken() {
         ByteBuffer buf = Helper.makeByteBuffer("Hello: world");
-        assertEquals(Strings.parseToken(buf), "Hello");
-        assertEquals(buf.get(), ':');
+        assertEquals("Hello", Strings.parseToken(buf));
+        assertEquals(':', buf.get());
 
         buf = Helper.makeByteBuffer(":");
-        assertEquals(Strings.parseToken(buf), "");
-        assertEquals(buf.get(), ':');
+        assertEquals("", Strings.parseToken(buf));
+        assertEquals(':', buf.get());
 
         buf = Helper.makeByteBuffer("");
-        assertEquals(Strings.parseToken(buf), "");
+        assertEquals("", Strings.parseToken(buf));
         assertFalse(buf.hasRemaining());
     }
 
     @Test
     public void testSkipWhitespaceString() {
         String s = "hello";
-        assertEquals(Strings.skipWhitespaceString(s, 0), 0);
-        assertEquals(Strings.skipWhitespaceStringReverse(s, s.length() - 1), s.length() - 1);
+        assertEquals(0, Strings.skipWhitespaceString(s, 0));
+        assertEquals(s.length() - 1, Strings.skipWhitespaceStringReverse(s, s.length() - 1));
 
         s = " hello ";
-        assertEquals(Strings.skipWhitespaceString(s, 0), 1);
-        assertEquals(Strings.skipWhitespaceStringReverse(s, s.length() - 1), s.length() - 2);
-        assertEquals(Strings.skipWhitespaceStringReverse(s, s.length()), s.length() - 2);
+        assertEquals(1, Strings.skipWhitespaceString(s, 0));
+        assertEquals(s.length() - 2, Strings.skipWhitespaceStringReverse(s, s.length() - 1));
+        assertEquals(s.length() - 2, Strings.skipWhitespaceStringReverse(s, s.length()));
     }
 
     @Test
