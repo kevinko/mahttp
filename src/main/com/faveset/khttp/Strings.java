@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 class Strings {
@@ -122,6 +123,23 @@ class Strings {
             default:
                 return false;
         }
+    }
+
+    public static String join(List<String> elems, String conjunction) {
+        if (elems.size() == 0) {
+            return new String();
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        Iterator<String> iter = elems.iterator();
+        sb.append(iter.next());
+
+        while (iter.hasNext()) {
+            sb.append(conjunction);
+            sb.append(iter.next());
+        }
+        return sb.toString();
     }
 
     /**

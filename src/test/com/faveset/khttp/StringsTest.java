@@ -38,6 +38,13 @@ public class StringsTest {
     }
 
     @Test
+    public void testJoin() {
+        assertEquals("", Strings.join(Arrays.asList(""), ","));
+        assertEquals("a", Strings.join(Arrays.asList("a"), ","));
+        assertEquals("a,b", Strings.join(Arrays.asList("a", "b"), ","));
+    }
+
+    @Test
     public void testParseLine() {
         String testStr = "line1\nline2\r\n\nline3";
         ByteBuffer buf = ByteBuffer.wrap(testStr.getBytes(Helper.US_ASCII_CHARSET));
