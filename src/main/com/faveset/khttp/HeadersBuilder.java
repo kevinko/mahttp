@@ -5,7 +5,7 @@ package com.faveset.khttp;
 import java.util.ArrayList;
 import java.util.List;
 
-class HeadersBuilder extends Headers {
+public class HeadersBuilder extends Headers {
     public HeadersBuilder() {
         super();
     }
