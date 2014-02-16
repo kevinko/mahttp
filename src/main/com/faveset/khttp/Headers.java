@@ -86,7 +86,7 @@ public class Headers {
      */
     public void write(ByteBuffer buf) throws BufferOverflowException {
         for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
-            buf.put(entry.getKey().getBytes(Strings.US_ASCII_CHARSET));
+            Strings.write(entry.getKey(), buf);
             buf.put(sHeaderDelimBytes);
             writeValue(buf, entry.getValue());
 
@@ -117,11 +117,11 @@ public class Headers {
         }
 
         Iterator<String> iter = values.iterator();
-        buf.put(iter.next().getBytes(Strings.US_ASCII_CHARSET));
+        Strings.write(iter.next(), buf);
 
         while (iter.hasNext()) {
             buf.put(sHeaderValueDelim);
-            buf.put(iter.next().getBytes(Strings.US_ASCII_CHARSET));
+            Strings.write(iter.next(), buf);
         }
     }
 }

@@ -11,7 +11,7 @@ import java.util.Iterator;
 import java.util.List;
 
 class Strings {
-    private static final Charset US_ASCII_CHARSET = Charset.forName("US-ASCII");
+    private static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
 
     /**
      * This also handles bare '\n', which might be erroneously passed by some
@@ -236,7 +236,7 @@ class Strings {
         }
 
         result.limit(buf.position());
-        return new String(result.array(), result.position(), result.remaining(), US_ASCII_CHARSET);
+        return new String(result.array(), result.position(), result.remaining(), sUsAsciiCharset);
     }
 
     /**
@@ -260,7 +260,7 @@ class Strings {
         }
 
         result.limit(buf.position());
-        return new String(result.array(), result.position(), result.remaining(), US_ASCII_CHARSET);
+        return new String(result.array(), result.position(), result.remaining(), sUsAsciiCharset);
     }
 
     /**
@@ -319,7 +319,7 @@ class Strings {
             }
         }
 
-        return new String(result.array(), result.position(), result.remaining(), US_ASCII_CHARSET);
+        return new String(result.array(), result.position(), result.remaining(), sUsAsciiCharset);
     }
 
     /**
@@ -422,5 +422,12 @@ class Strings {
             }
         }
         return -1;
+    }
+
+    /**
+     * Writes s to buf, converting s to ASCII format.
+     */
+    public static void write(String s, ByteBuffer buf) {
+        buf.put(s.getBytes(sUsAsciiCharset));
     }
 }
