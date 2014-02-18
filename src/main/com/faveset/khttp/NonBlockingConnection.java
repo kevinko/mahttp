@@ -24,11 +24,16 @@ class NonBlockingConnection {
         void onRecv(NonBlockingConnection conn, ByteBuffer buf);
     }
 
-    /**
-     * buf is the internal out buffer that can be used for writing more data.
-     */
     public interface OnSendCallback {
-        void onSend(NonBlockingConnection conn, ByteBuffer buf);
+        void onSend(NonBlockingConnection conn);
+    }
+
+    private enum SendType {
+        INTERNAL,
+        INTERNAL_PARTIAL,
+        // External ByteBuffers.
+        EXTERNAL_SINGLE,
+        EXTERNAL_MULTIPLE,
     }
 
     private SocketChannel mChan;
@@ -36,11 +41,14 @@ class NonBlockingConnection {
 
     private ByteBuffer mInBuffer;
 
-    // The outbuffer is mOutBufferInternal initially and can be temporarily
-    // changed using various send methods.
+    // This can point to an external or internal buffer.  It is configured
+    // by send methods.
     private ByteBuffer mOutBuffer;
 
     private ByteBuffer mOutBufferInternal;
+
+    private ByteBuffer[] mExternalOutBuffers;
+    private long mExternalOutBuffersRemaining;
 
     private OnCloseCallback mOnCloseCallback;
 
@@ -49,12 +57,9 @@ class NonBlockingConnection {
     private OnRecvCallback mOnRecvCallback;
     private OnSendCallback mOnSendCallback;
 
-    // We're using an alternative buffer.
-    private boolean mIsBufferSend;
-
-    private boolean mIsPartialSend;
-
     private boolean mIsRecvPersistent;
+
+    private SendType mSendType;
 
     /**
      * @bufferSize size in bytes for the send and receive buffers.
@@ -66,7 +71,8 @@ class NonBlockingConnection {
 
         mInBuffer = ByteBuffer.allocateDirect(bufferSize);
         mOutBufferInternal = ByteBuffer.allocateDirect(bufferSize);
-        mOutBuffer = mOutBufferInternal;
+
+        mSendType = SendType.INTERNAL;
     }
 
     /**
@@ -86,6 +92,7 @@ class NonBlockingConnection {
 
     /**
      * Cancels the send handler and write interest on the selection key.
+     * The send type will be reset to INTERNAL.
      */
     private void cancelSend() {
         if (mOnSendCallback == null) {
@@ -96,6 +103,9 @@ class NonBlockingConnection {
 
         int newOps = mKey.interestOps() & ~SelectionKey.OP_WRITE;
         mKey.interestOps(newOps);
+
+        mSendType = SendType.INTERNAL;
+        mOutBuffer = null;
     }
 
     /**
@@ -112,10 +122,10 @@ class NonBlockingConnection {
     }
 
     /**
-     * @return the current send buffer.
+     * @return the internal send buffer.
      */
     public ByteBuffer getOutBuffer() {
-        return mOutBuffer;
+        return mOutBufferInternal;
     }
 
     /**
@@ -148,29 +158,51 @@ class NonBlockingConnection {
      * buffer is exhausted.
      */
     private void handleWrite() throws IOException {
-        int len = mChan.write(mOutBuffer);
-
-        if (mOutBuffer.hasRemaining()) {
-            if (mIsPartialSend) {
-                if (mOnSendCallback != null) {
-                    mOnSendCallback.onSend(this, mOutBuffer);
-                }
-
-                cancelSend();
+        if (mSendType == SendType.EXTERNAL_MULTIPLE) {
+            long len = mChan.write(mExternalOutBuffers);
+            mExternalOutBuffersRemaining -= len;
+            if (mExternalOutBuffersRemaining > 0) {
+                // We need to continue later.
+                return;
             }
+
+            // Otherwise, we're done.
+            //
+            // Cancel the selector first, in case the callback decides to
+            // reconfigure a send.
+            cancelSend();
+
+            if (mOnSendCallback != null) {
+                mOnSendCallback.onSend(this);
+            }
+
             return;
         }
 
-        if (mIsBufferSend) {
-            // Restore the buffer.
-            mOutBuffer = mOutBufferInternal;
-            mIsBufferSend = false;
+        mChan.write(mOutBuffer);
+
+        if (mOutBuffer.hasRemaining()) {
+            if (mSendType == SendType.INTERNAL_PARTIAL) {
+                // Cancel the selector interest first so that the callback's
+                // actions can take precedence.
+                cancelSend();
+
+                if (mOnSendCallback != null) {
+                    mOnSendCallback.onSend(this);
+                }
+            }
+
+            // Otherwise, the selector is still waiting for send opportunities.
+            return;
         }
 
-        if (mOnSendCallback != null) {
-            mOnSendCallback.onSend(this, mOutBuffer);
-        }
+        // Cancel the selector interest first so that the callback's
+        // actions can take precedence.
         cancelSend();
+
+        if (mOnSendCallback != null) {
+            mOnSendCallback.onSend(this);
+        }
     }
 
     // This will be called when the Selector selects the key managed by the
@@ -197,14 +229,6 @@ class NonBlockingConnection {
         recvImpl(callback, false);
     }
 
-    /**
-     * A persistent version of recv.  The callback will remain scheduled
-     * until the recv is cancelled with cancelRecv.
-     */
-    public void recvPersistent(OnRecvCallback callback) {
-        recvImpl(callback, true);
-    }
-
     private void recvImpl(OnRecvCallback callback, boolean isPersistent) {
         if (mOnRecvCallback == null) {
             int newOps = mKey.interestOps() | SelectionKey.OP_READ;
@@ -216,13 +240,37 @@ class NonBlockingConnection {
     }
 
     /**
+     * A persistent version of recv.  The callback will remain scheduled
+     * until the recv is cancelled with cancelRecv.
+     */
+    public void recvPersistent(OnRecvCallback callback) {
+        recvImpl(callback, true);
+    }
+
+    /**
+     * Schedules the selector to listen for write opportunities and assigns
+     * mOnSendCallback.
+     */
+    private void registerSendCallback(OnSendCallback callback) {
+        if (mOnSendCallback == null) {
+            int newOps = mKey.interestOps() | SelectionKey.OP_WRITE;
+            mKey.interestOps(newOps);
+        }
+
+        mOnSendCallback = callback;
+    }
+
+    /**
      * Schedules the contents of the out buffer for sending.  Callback will
      * be called when the buffer is completely drained.  The buffer will not
      * be compacted, cleared, or otherwise modified.  The callback is not
      * persistent.
      */
     public void send(OnSendCallback callback) {
-        sendImpl(callback, false);
+        mSendType = SendType.INTERNAL;
+        mOutBuffer = mOutBufferInternal;
+
+        registerSendCallback(callback);
     }
 
     /**
@@ -235,11 +283,33 @@ class NonBlockingConnection {
      *
      * @param callback will be called on completion.
      */
-    public void sendBuffer(OnSendCallback callback, ByteBuffer buf) {
-        mIsBufferSend = true;
+    public void send(OnSendCallback callback, ByteBuffer buf) {
+        mSendType = SendType.EXTERNAL_SINGLE;
         mOutBuffer = buf;
 
-        sendImpl(callback, false);
+        registerSendCallback(callback);
+    }
+
+    /**
+     * A variant of send() that sends an array of ByteBuffers.  The callback
+     * is not persistent.
+     *
+     * @param bufsRemaining is the total number of bytes remaining for bufs.
+     * Set to 0 to calculate automatically.
+     */
+    public void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining) {
+        mSendType = SendType.EXTERNAL_MULTIPLE;
+        mExternalOutBuffers = bufs;
+
+        if (bufsRemaining == 0) {
+            for (int ii = 0; ii < bufs.length; ii++) {
+                bufsRemaining += bufs[ii].remaining();
+            }
+        }
+
+        mExternalOutBuffersRemaining = bufsRemaining;
+
+        registerSendCallback(callback);
     }
 
     /**
@@ -250,17 +320,10 @@ class NonBlockingConnection {
      * sendBuffer must not be called during callback.
      */
     public void sendPartial(OnSendCallback callback) {
-        sendImpl(callback, true);
-    }
+        mSendType = SendType.INTERNAL_PARTIAL;
+        mOutBuffer = mOutBufferInternal;
 
-    private void sendImpl(OnSendCallback callback, boolean isPartial) {
-        if (mOnSendCallback == null) {
-            int newOps = mKey.interestOps() | SelectionKey.OP_WRITE;
-            mKey.interestOps(newOps);
-        }
-
-        mOnSendCallback = callback;
-        mIsPartialSend = isPartial;
+        registerSendCallback(callback);
     }
 
     /**
