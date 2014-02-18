@@ -54,4 +54,25 @@ public class HeadersTest extends Headers {
         buf.flip();
         Helper.compare(buf, "Hello: world\r\n");
     }
+
+    public void testWritePool() {
+        ByteBufferPool pool = new ByteBufferPool(4, false);
+
+        HeadersBuilder builder = new HeadersBuilder();
+        builder.add("hello", "world");
+        builder.add("hello", "how");
+        builder.add("hello", "are");
+        builder.add("hello", "you");
+        builder.write(pool);
+
+        ByteBuffer[] bufs = pool.build();
+        assertEquals(7, bufs.length);
+        Helper.compare(bufs[0], "Hell");
+        Helper.compare(bufs[1], "o: w");
+        Helper.compare(bufs[2], "orld");
+        Helper.compare(bufs[3], ",how");
+        Helper.compare(bufs[4], ",are");
+        Helper.compare(bufs[5], ",you");
+        Helper.compare(bufs[6], "\r\n");
+    }
 }

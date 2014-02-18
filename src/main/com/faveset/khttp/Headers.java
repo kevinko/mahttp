@@ -15,13 +15,17 @@ import java.util.Map;
  * Represents the key-value pairs in an HTTP headers.
  */
 public class Headers {
+    private static final String sCrlf = "\r\n";
     private static final byte[] sCrlfBytes = { (byte) '\r', (byte) '\n' };
 
     // Holds the characters representing the delimiter between header key and
     // value.
+    private static final String sHeaderDelim = ": ";
     private static final byte[] sHeaderDelimBytes = { (byte) ':', (byte) ' ' };
+
     // Used to delimit multiple header values.
-    private static final byte sHeaderValueDelim = (byte) ',';
+    private static final String sHeaderValueDelim = ",";
+    private static final byte sHeaderValueDelimByte = (byte) ',';
 
     protected HashMap<String, List<String>> mHeaders;
 
@@ -77,7 +81,7 @@ public class Headers {
      */
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        writeString(builder);
+        write(builder);
         return builder.toString();
     }
 
@@ -95,9 +99,21 @@ public class Headers {
     }
 
     /**
+     * Writes the headers in (HTTP) wire format to bufPool.
+     */
+    public void write(ByteBufferPool bufPool) {
+        for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
+            bufPool.writeString(entry.getKey());
+            bufPool.writeString(sHeaderDelim);
+            writeValuePool(bufPool, entry.getValue());
+            bufPool.writeString(sCrlf);
+        }
+    }
+
+    /**
      * Write the headers in (HTTP) wire format to the StringBuilder.
      */
-    public void writeString(StringBuilder builder) {
+    public void write(StringBuilder builder) {
         for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
             builder.append(entry.getKey());
             builder.append(": ");
@@ -120,8 +136,22 @@ public class Headers {
         Strings.write(iter.next(), buf);
 
         while (iter.hasNext()) {
-            buf.put(sHeaderValueDelim);
+            buf.put(sHeaderValueDelimByte);
             Strings.write(iter.next(), buf);
+        }
+    }
+
+    private void writeValuePool(ByteBufferPool pool, List<String> values) {
+        if (values.size() == 0) {
+            return;
+        }
+
+        Iterator<String> iter = values.iterator();
+        pool.writeString(iter.next());
+
+        while (iter.hasNext()) {
+            pool.writeString(sHeaderValueDelim);
+            pool.writeString(iter.next());
         }
     }
 }
