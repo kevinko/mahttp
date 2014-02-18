@@ -17,6 +17,9 @@ class ByteBufferPool {
     private int mBufSize;
     private List<ByteBuffer> mBufs;
 
+    // This tracks all remaining counts except for mCurrBuf (i.e., mBufs).
+    private int mRemaining;
+
     // null when a new buffer should be added to the list.  Otherwise,
     // it points to the current buffer that is being used for writing at the
     // tail of the list.
@@ -41,7 +44,9 @@ class ByteBufferPool {
 
     /**
      * Closes the pool to future writes and returns an array for consumption
-     * by a Channel.  The pool will then be reset.
+     * by a Channel.  The returned buffers will have total remaining bytes
+     * of remaining().  After build(), the pool will be reset (remaining() will
+     * be cleared).
      */
     public ByteBuffer[] build() {
         if (mCurrBuf != null) {
@@ -61,6 +66,21 @@ class ByteBufferPool {
     public void clear() {
         mCurrBuf = null;
         mBufs.clear();
+        mRemaining = 0;
+    }
+
+    /**
+     * Returns the total number of bytes remaining for all buffers within the
+     * pool.
+     */
+    public int remaining() {
+        int count = mRemaining;
+        if (mCurrBuf != null) {
+            // Factor in mCurrBuf.  mCurrBufs are always allocated within this
+            // class and increase from position 0.
+            count += mCurrBuf.position();
+        }
+        return count;
     }
 
     /**
@@ -74,10 +94,14 @@ class ByteBufferPool {
     public void writeBuffer(ByteBuffer buf) {
         if (mCurrBuf != null) {
             mCurrBuf.flip();
+
+            mRemaining += mCurrBuf.remaining();
+
             mCurrBuf = null;
         }
 
         mBufs.add(buf.duplicate());
+        mRemaining += buf.remaining();
     }
 
     /**
@@ -103,6 +127,8 @@ class ByteBufferPool {
             if (remLen == 0) {
                 if (mCurrBuf != null) {
                     mCurrBuf.flip();
+
+                    mRemaining += mCurrBuf.remaining();
                 }
 
                 mCurrBuf = allocate();

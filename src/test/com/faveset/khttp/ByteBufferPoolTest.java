@@ -26,6 +26,8 @@ public class ByteBufferPoolTest {
 
         pool.writeString("world");
 
+        assertEquals(13, pool.remaining());
+
         ByteBuffer[] bufs = pool.build();
         assertEquals(5, bufs.length);
 
@@ -45,6 +47,8 @@ public class ByteBufferPoolTest {
         // Now, write exactly at the boundaries.
         pool.writeString("fo");
         pool.writeString("oob");
+
+        assertEquals(15, pool.remaining());
 
         ByteBuffer[] bufs = pool.build();
         assertEquals(4, bufs.length);
