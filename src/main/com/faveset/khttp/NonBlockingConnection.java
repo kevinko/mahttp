@@ -131,11 +131,14 @@ class NonBlockingConnection {
             }
             return;
         }
+
+        if (!mIsRecvPersistent) {
+            // Cancel selector interest first to yield to the callback.
+            cancelRecv();
+        }
+
         if (mOnRecvCallback != null) {
             mOnRecvCallback.onRecv(this, mInBuffer);
-        }
-        if (!mIsRecvPersistent) {
-            cancelRecv();
         }
     }
 
