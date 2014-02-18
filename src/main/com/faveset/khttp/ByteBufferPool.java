@@ -18,7 +18,7 @@ class ByteBufferPool {
     private List<ByteBuffer> mBufs;
 
     // This tracks all remaining counts except for mCurrBuf (i.e., mBufs).
-    private int mRemaining;
+    private long mRemaining;
 
     // null when a new buffer should be added to the list.  Otherwise,
     // it points to the current buffer that is being used for writing at the
@@ -73,8 +73,8 @@ class ByteBufferPool {
      * Returns the total number of bytes remaining for all buffers within the
      * pool.
      */
-    public int remaining() {
-        int count = mRemaining;
+    public long remaining() {
+        long count = mRemaining;
         if (mCurrBuf != null) {
             // Factor in mCurrBuf.  mCurrBufs are always allocated within this
             // class and increase from position 0.
