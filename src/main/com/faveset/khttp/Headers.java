@@ -15,9 +15,6 @@ import java.util.Map;
  * Represents the key-value pairs in an HTTP headers.
  */
 public class Headers {
-    private static final String sCrlf = "\r\n";
-    private static final byte[] sCrlfBytes = { (byte) '\r', (byte) '\n' };
-
     // Holds the characters representing the delimiter between header key and
     // value.
     private static final String sHeaderDelim = ": ";
@@ -94,7 +91,7 @@ public class Headers {
             buf.put(sHeaderDelimBytes);
             writeValue(buf, entry.getValue());
 
-            buf.put(sCrlfBytes);
+            buf.put(Strings.CRLF_BYTES);
         }
     }
 
@@ -106,7 +103,7 @@ public class Headers {
             bufPool.writeString(entry.getKey());
             bufPool.writeString(sHeaderDelim);
             writeValuePool(bufPool, entry.getValue());
-            bufPool.writeString(sCrlf);
+            bufPool.writeString(Strings.CRLF);
         }
     }
 

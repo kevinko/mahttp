@@ -11,6 +11,9 @@ import java.util.Iterator;
 import java.util.List;
 
 class Strings {
+    public static final String CRLF = "\r\n";
+    public static final byte[] CRLF_BYTES = { (byte) '\r', (byte) '\n' };
+
     private static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
 
     /**
