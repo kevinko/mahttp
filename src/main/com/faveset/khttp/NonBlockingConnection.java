@@ -129,6 +129,13 @@ class NonBlockingConnection {
     }
 
     /**
+     * @return the SelectionKey for the connection.
+     */
+    public SelectionKey getSelectionKey() {
+        return mKey;
+    }
+
+    /**
      * Reads as much data as possible into the buffer and then triggers any
      * callbacks.
      */
@@ -142,13 +149,16 @@ class NonBlockingConnection {
             return;
         }
 
+        // Save the callback so that it will persist even through cancelling.
+        OnRecvCallback callback = mOnRecvCallback;
+
         if (!mIsRecvPersistent) {
             // Cancel selector interest first to yield to the callback.
             cancelRecv();
         }
 
-        if (mOnRecvCallback != null) {
-            mOnRecvCallback.onRecv(this, mInBuffer);
+        if (callback != null) {
+            callback.onRecv(this, mInBuffer);
         }
     }
 
@@ -166,14 +176,16 @@ class NonBlockingConnection {
                 return;
             }
 
-            // Otherwise, we're done.
-            //
-            // Cancel the selector first, in case the callback decides to
-            // reconfigure a send.
+            // Otherwise, we're done.  Save the callback so that it will persist
+            // through the cancel.
+            OnSendCallback callback = mOnSendCallback;
+
+            // Since sends are not persistent, cancel the selector first, in
+            // case the callback decides to reconfigure a send.
             cancelSend();
 
-            if (mOnSendCallback != null) {
-                mOnSendCallback.onSend(this);
+            if (callback != null) {
+                callback.onSend(this);
             }
 
             return;
@@ -183,12 +195,15 @@ class NonBlockingConnection {
 
         if (mOutBuffer.hasRemaining()) {
             if (mSendType == SendType.INTERNAL_PARTIAL) {
+                // Save the callback to persist through cancel.
+                OnSendCallback callback = mOnSendCallback;
+
                 // Cancel the selector interest first so that the callback's
                 // actions can take precedence.
                 cancelSend();
 
-                if (mOnSendCallback != null) {
-                    mOnSendCallback.onSend(this);
+                if (callback != null) {
+                    callback.onSend(this);
                 }
             }
 
@@ -196,18 +211,23 @@ class NonBlockingConnection {
             return;
         }
 
+        // Save the callback to persist through cancel.
+        OnSendCallback callback = mOnSendCallback;
+
         // Cancel the selector interest first so that the callback's
         // actions can take precedence.
         cancelSend();
 
-        if (mOnSendCallback != null) {
-            mOnSendCallback.onSend(this);
+        if (callback != null) {
+            callback.onSend(this);
         }
     }
 
     // This will be called when the Selector selects the key managed by the
     // connection.
-    public void onSelect(SelectionKey key) throws IOException {
+    public void onSelect() throws IOException {
+        SelectionKey key = mKey;
+
         if (!key.isValid()) {
             return;
         }
@@ -278,8 +298,8 @@ class NonBlockingConnection {
      * buffer.  (This is useful for sending MappedByteBuffers.)  The callback
      * is not persistent.
      *
-     * One must not manipulate the buffer while a send is in progress.  This
-     * must not be called via a sendPartial callback.
+     * IMPORTANT: One must not manipulate the buffer while a send is in
+     * progress, since the contents are not copied.
      *
      * @param callback will be called on completion.
      */
@@ -315,9 +335,11 @@ class NonBlockingConnection {
     /**
      * Schedules the contents of the out buffer for sending.  Callback will
      * be called as soon data has been sent from the buffer.  This is not
-     * persistent.
+     * persistent.  As such, the sendPartial will typically be
+     * rescheduled in the callback.
      *
-     * sendBuffer must not be called during callback.
+     * If a send is called during the callback, it will take priority over
+     * whatever remains in the internal buffer.
      */
     public void sendPartial(OnSendCallback callback) {
         mSendType = SendType.INTERNAL_PARTIAL;
