@@ -148,6 +148,8 @@ class NonBlockingConnection {
             }
             return;
         }
+        // Ensure that the callback accesses the buffer contents from the start.
+        mInBuffer.flip();
 
         // Save the callback so that it will persist even through cancelling.
         OnRecvCallback callback = mOnRecvCallback;
