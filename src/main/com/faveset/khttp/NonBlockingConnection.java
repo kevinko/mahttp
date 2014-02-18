@@ -230,15 +230,11 @@ class NonBlockingConnection {
     public void onSelect() throws IOException {
         SelectionKey key = mKey;
 
-        if (!key.isValid()) {
-            return;
-        }
-
-        if (key.isReadable()) {
+        if (key.isValid() && key.isReadable()) {
             handleRead();
         }
 
-        if (key.isWritable()) {
+        if (key.isValid() && key.isWritable()) {
             handleWrite();
         }
     }
