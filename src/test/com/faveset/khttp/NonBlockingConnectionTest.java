@@ -3,6 +3,7 @@
 package com.faveset.khttp;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -317,6 +318,45 @@ public class NonBlockingConnectionTest {
                         }
                     }
                 }, bufs, remCount);
+            }
+        };
+
+        tester.run();
+    }
+
+    public void testSendPartial() throws IOException, InterruptedException {
+        final String expectedString = makeTestString(65535);
+        final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
+
+        Tester tester = new Tester(makeRecvTask(expectedString), 65536) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                ByteBuffer outBuf = conn.getOutBuffer();
+                outBuf.put(buf);
+                outBuf.flip();
+
+                conn.sendPartial(new NonBlockingConnection.OnSendCallback() {
+                    private int mSendCount = 0;
+
+                    public void onSend(NonBlockingConnection conn) {
+                        try {
+                            mSendCount++;
+
+                            if (!conn.getOutBuffer().hasRemaining()) {
+                                // The partial callback should be called
+                                // a couple of times, since the buffer size
+                                // is large.
+                                assertTrue(mSendCount > 1);
+
+                                conn.close();
+                            } else {
+                                conn.sendPartial(this);
+                            }
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
             }
         };
 
