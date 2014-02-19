@@ -5,6 +5,7 @@ package com.faveset.khttp;
 import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -14,6 +15,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.Charset;
 import java.util.Set;
 
 import org.junit.Test;
@@ -22,6 +24,7 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class NonBlockingConnectionTest {
+    private static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
     private static final int sListenPort = 4889;
 
     private static class ServerThread extends Thread {
@@ -113,7 +116,7 @@ public class NonBlockingConnectionTest {
     }
 
     @Test
-    public void test() throws IOException, InterruptedException {
+    public void testRecv() throws IOException, InterruptedException {
         Tester tester = new Tester(new ServerThread.Task() {
             public void run(Socket sock) {
                 try {
@@ -137,6 +140,50 @@ public class NonBlockingConnectionTest {
                             cmpBuf.flip();
                             Helper.compare(cmpBuf, "test");
 
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+            }
+        };
+
+        tester.run();
+    }
+
+    private ServerThread.Task makeRecvTask(final String expectedStr) {
+        return new ServerThread.Task() {
+            public void run(Socket sock) {
+                try {
+                    InputStream is = sock.getInputStream();
+                    byte[] data = new byte[expectedStr.length()];
+                    assertEquals(expectedStr.length(), is.read(data));
+
+                    String s = new String(data, sUsAsciiCharset);
+                    assertEquals(expectedStr, s);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        };
+    }
+
+    @Test
+    public void testSend() throws IOException, InterruptedException {
+        Tester tester = new Tester(makeRecvTask("test"), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                ByteBuffer buf = conn.getOutBuffer();
+
+                String s = "test";
+                buf.put(s.getBytes(Helper.US_ASCII_CHARSET));
+
+                buf.flip();
+
+                conn.send(new NonBlockingConnection.OnSendCallback() {
+                    public void onSend(NonBlockingConnection conn) {
+                        try {
                             conn.close();
                         } catch (IOException e) {
                             throw new RuntimeException(e);
