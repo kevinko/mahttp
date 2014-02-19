@@ -169,14 +169,25 @@ public class NonBlockingConnectionTest {
         };
     }
 
+    private String makeTestString(int size) {
+        StringBuilder builder = new StringBuilder();
+        for (int ii = 0; ii < size; ii++) {
+            char ch = (char) ((byte) 'a' + (ii % 26));
+            builder.append(ch);
+        }
+        return builder.toString();
+    }
+
     @Test
     public void testSend() throws IOException, InterruptedException {
-        Tester tester = new Tester(makeRecvTask("test"), 1024) {
+        final String expectedString = makeTestString(128);
+
+        Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
             @Override
             protected void prepareConn(NonBlockingConnection conn) {
                 ByteBuffer buf = conn.getOutBuffer();
 
-                String s = "test";
+                String s = expectedString;
                 buf.put(s.getBytes(Helper.US_ASCII_CHARSET));
 
                 buf.flip();
