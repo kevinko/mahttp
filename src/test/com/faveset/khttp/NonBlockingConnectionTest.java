@@ -198,10 +198,19 @@ public class NonBlockingConnectionTest {
                 try {
                     InputStream is = sock.getInputStream();
                     byte[] data = new byte[expectedStr.length()];
-                    assertEquals(expectedStr.length(), is.read(data));
+
+                    int count = 0;
+                    while (count < expectedStr.length()) {
+                        int remLen = expectedStr.length() - count;
+                        int len = is.read(data, count, remLen);
+                        count += len;
+                    }
 
                     String s = new String(data, sUsAsciiCharset);
                     assertEquals(expectedStr, s);
+
+                    // Read one more byte, which should be connection close.
+                    assertEquals(-1, is.read(data));
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
