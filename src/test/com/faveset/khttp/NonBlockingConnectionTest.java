@@ -69,6 +69,9 @@ public class NonBlockingConnectionTest {
         private ServerThread.Task mServerTask;
         private int mBufferSize;
 
+        /**
+         * @param bufferSize will be passed to the NonBlockingConnection.
+         */
         public Tester(ServerThread.Task serverTask, int bufferSize) {
             mServerTask = serverTask;
             mBufferSize = bufferSize;
@@ -116,19 +119,11 @@ public class NonBlockingConnectionTest {
     }
 
     @Test
-    public void testRecv() throws IOException, InterruptedException {
-        Tester tester = new Tester(new ServerThread.Task() {
-            public void run(Socket sock) {
-                try {
-                    OutputStream os = sock.getOutputStream();
+    public void testRecvSimple() throws IOException, InterruptedException {
+        // Pick something that fits within a single buffer.
+        final String expectedStr = makeTestString(128);
 
-                    String data = "test";
-                    os.write(data.getBytes(Helper.US_ASCII_CHARSET));
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }, 1024) {
+        Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
             @Override
             protected void prepareConn(NonBlockingConnection conn) {
                 conn.recv(new NonBlockingConnection.OnRecvCallback() {
@@ -138,7 +133,7 @@ public class NonBlockingConnectionTest {
 
                             cmpBuf.put(buf);
                             cmpBuf.flip();
-                            Helper.compare(cmpBuf, "test");
+                            Helper.compare(cmpBuf, expectedStr);
 
                             conn.close();
                         } catch (IOException e) {
@@ -146,6 +141,51 @@ public class NonBlockingConnectionTest {
                         }
                     }
                 });
+            }
+        };
+
+        tester.run();
+    }
+
+    @Test
+    public void testRecvLong() throws IOException, InterruptedException {
+        // Pick something that exceeds a single buffer.
+        final String expectedStr = makeTestString(4096);
+
+        Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
+            private int mRecvCount = 0;
+            private ByteBuffer mCmpBuf = ByteBuffer.allocate(2 * expectedStr.length());
+
+            private NonBlockingConnection.OnRecvCallback makeRecvCallback() {
+                return new NonBlockingConnection.OnRecvCallback() {
+                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                        handleRecv(conn, buf);
+                    }
+                };
+            }
+
+            private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                try {
+                    mCmpBuf.put(buf);
+
+                    if (mCmpBuf.position() < expectedStr.length()) {
+                        // Continue feeding.
+                        conn.recv(makeRecvCallback());
+                        return;
+                    }
+
+                    mCmpBuf.flip();
+                    Helper.compare(mCmpBuf, expectedStr);
+
+                    conn.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.recv(makeRecvCallback());
             }
         };
 
@@ -162,6 +202,21 @@ public class NonBlockingConnectionTest {
 
                     String s = new String(data, sUsAsciiCharset);
                     assertEquals(expectedStr, s);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        };
+    }
+
+    private ServerThread.Task makeSendTask(final String testStr) {
+        return new ServerThread.Task() {
+            public void run(Socket sock) {
+                try {
+                    OutputStream os = sock.getOutputStream();
+
+                    String data = testStr;
+                    os.write(data.getBytes(Helper.US_ASCII_CHARSET));
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
