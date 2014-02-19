@@ -261,4 +261,28 @@ public class NonBlockingConnectionTest {
 
         tester.run();
     }
+
+    @Test
+    public void testSendBuffer() throws IOException, InterruptedException {
+        final String expectedString = makeTestString(128);
+
+        Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                ByteBuffer src = Helper.makeByteBuffer(expectedString);
+
+                conn.send(new NonBlockingConnection.OnSendCallback() {
+                    public void onSend(NonBlockingConnection conn) {
+                        try {
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }, src);
+            }
+        };
+
+        tester.run();
+    }
 }
