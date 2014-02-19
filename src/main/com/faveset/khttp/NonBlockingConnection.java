@@ -242,6 +242,11 @@ class NonBlockingConnection {
     /**
      * Configures the connection for receiving data.  The callback will be
      * called when new data is received.
+     *
+     * This is not persistent.
+     *
+     * NOTE: the buffer that is passed to the callback (the internal in buffer)
+     * is only guaranteed for the life of the callback.
      */
     public void recv(OnRecvCallback callback) {
         recvImpl(callback, false);
@@ -255,6 +260,9 @@ class NonBlockingConnection {
 
         mOnRecvCallback = callback;
         mIsRecvPersistent = isPersistent;
+
+        // Prepare the in buffer for receiving.
+        mInBuffer.clear();
     }
 
     /**
