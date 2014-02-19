@@ -34,7 +34,7 @@ class RequestHeaderHandler implements StateHandler {
         }
 
         if (lineBuf == null) {
-            // We need more data.
+            // We need more data.  buf was compacted by parseLine.
             return false;
         }
 
