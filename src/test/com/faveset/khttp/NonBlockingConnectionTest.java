@@ -294,4 +294,32 @@ public class NonBlockingConnectionTest {
 
         tester.run();
     }
+
+    @Test
+    public void testSendBuffers() throws IOException, InterruptedException {
+        // Pick an number that is not divisible by a buffer size.
+        final String expectedString = makeTestString(5001);
+        ByteBufferPool pool = new ByteBufferPool(16, true);
+        pool.writeString(expectedString);
+
+        final long remCount = pool.remaining();
+        final ByteBuffer[] bufs = pool.build();
+
+        Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.send(new NonBlockingConnection.OnSendCallback() {
+                    public void onSend(NonBlockingConnection conn) {
+                        try {
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }, bufs, remCount);
+            }
+        };
+
+        tester.run();
+    }
 }
