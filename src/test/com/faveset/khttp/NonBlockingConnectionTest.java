@@ -62,10 +62,59 @@ public class NonBlockingConnectionTest {
         return SocketChannel.open(sa);
     }
 
+    private abstract class Tester {
+        private ServerThread.Task mServerTask;
+        private int mBufferSize;
+
+        public Tester(ServerThread.Task serverTask, int bufferSize) {
+            mServerTask = serverTask;
+            mBufferSize = bufferSize;
+        }
+
+        protected abstract void prepareConn(NonBlockingConnection conn);
+
+        public void run() throws IOException, InterruptedException {
+            Object signal = new Object();
+            ServerThread server = new ServerThread(signal, mServerTask);
+            server.start();
+
+            synchronized (signal) {
+                signal.wait();
+            }
+
+            final Selector selector = Selector.open();
+            SocketChannel chan = connect(sListenPort);
+            NonBlockingConnection conn = new NonBlockingConnection(selector, chan, mBufferSize);
+
+            prepareConn(conn);
+
+            SelectionKey connKey = conn.getSelectionKey();
+            while (true) {
+                // We busy wait here, since we want to stop as soon as all keys
+                // are cancelled.
+                selector.selectNow();
+                if (selector.keys().size() == 0) {
+                    break;
+                }
+
+                Set<SelectionKey> readyKeys = selector.keys();
+
+                for (SelectionKey key : readyKeys) {
+                    if (key.equals(connKey)) {
+                        conn.onSelect();
+                    }
+                }
+            }
+
+            selector.close();
+
+            server.join();
+        }
+    }
+
     @Test
     public void test() throws IOException, InterruptedException {
-        Object signal = new Object();
-        ServerThread server = new ServerThread(signal, new ServerThread.Task() {
+        Tester tester = new Tester(new ServerThread.Task() {
             public void run(Socket sock) {
                 try {
                     OutputStream os = sock.getOutputStream();
@@ -76,55 +125,27 @@ public class NonBlockingConnectionTest {
                     throw new RuntimeException(e);
                 }
             }
-        });
-        server.start();
+        }, 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.recv(new NonBlockingConnection.OnRecvCallback() {
+                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                        try {
+                            ByteBuffer cmpBuf = ByteBuffer.allocate(1024);
 
-        synchronized (signal) {
-            signal.wait();
-        }
+                            cmpBuf.put(buf);
+                            cmpBuf.flip();
+                            Helper.compare(cmpBuf, "test");
 
-        final Selector selector = Selector.open();
-        SocketChannel chan = connect(sListenPort);
-        NonBlockingConnection conn = new NonBlockingConnection(selector, chan, 1024);
-        SelectionKey connKey = conn.getSelectionKey();
-
-        boolean done = false;
-
-        conn.recv(new NonBlockingConnection.OnRecvCallback() {
-            public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
-                try {
-                    ByteBuffer cmpBuf = ByteBuffer.allocate(1024);
-
-                    cmpBuf.put(buf);
-                    cmpBuf.flip();
-                    Helper.compare(cmpBuf, "test");
-
-                    conn.close();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
             }
-        });
+        };
 
-        while (true) {
-            // We busy wait here, since we want to stop as soon as all keys
-            // are cancelled.
-            selector.selectNow();
-            if (selector.keys().size() == 0) {
-                break;
-            }
-
-            Set<SelectionKey> readyKeys = selector.keys();
-
-            for (SelectionKey key : readyKeys) {
-                if (key.equals(connKey)) {
-                    conn.onSelect();
-                }
-            }
-        }
-
-        selector.close();
-
-        server.join();
+        tester.run();
     }
 }
