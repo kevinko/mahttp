@@ -12,6 +12,8 @@ interface StateHandler {
     /**
      * Performs a step of the state machine.
      *
+     * @param buf holds unread data from the connection.
+     *
      * @return true if the state is complete.  False if more data is needed
      * in buf to proceed.
      */
