@@ -10,7 +10,8 @@ import java.nio.ByteBuffer;
  */
 interface StateHandler {
     /**
-     * Performs a step of the state machine.
+     * Performs a step of the state machine when reading new data from the
+     * connection.
      *
      * @param buf holds unread data from the connection.
      *
