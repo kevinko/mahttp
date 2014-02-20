@@ -72,12 +72,15 @@ class ResponseWriter implements HttpResponseWriter {
 
     /**
      * Finalizes the response and sends it over the connection.  This manages
-     * NonBlockingConnection callbacks until completion and then calls the
-     * OnSendCallback specified in setOnSendCallback when sending is done.
+     * NonBlockingConnection callbacks until completion and then calls
+     * callback when sending is done.
      *
-     * The callback should clear the ResponseWriter's state before reusing.
+     * The callback should clear the ResponseWriter's state before reusing
+     * the ResponseWriter.
      */
-    public void send(NonBlockingConnection conn) {
+    public void send(NonBlockingConnection conn, OnSendCallback callback) {
+        mSendCallback = callback;
+
         long remCount = mBufPool.remaining();
         ByteBuffer[] bufs = mBufPool.build();
         conn.send(mNbcSendCallback, bufs, remCount);
@@ -90,14 +93,6 @@ class ResponseWriter implements HttpResponseWriter {
      * @return this for chaining.
     public ResponseWriter setHttpMinorVersion(int minorVersion) {
         mHttpMinorVersion = minorVersion;
-        return this;
-    }
-
-    /**
-     * Assigns the send callback and returns this (for chaining).
-     */
-    public ResponseWriter setOnSendCallback(OnSendCallback cb) {
-        mSendCallback = cb;
         return this;
     }
 
