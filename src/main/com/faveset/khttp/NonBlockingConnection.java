@@ -77,10 +77,14 @@ class NonBlockingConnection {
 
     /**
      * Cancels the receive handler and read interest on the selection key.
+     *
+     * @return the cancelled callback, which will be null if not assigned.
      */
-    public void cancelRecv() {
+    public OnRecvCallback cancelRecv() {
+        OnRecvCallback result = mOnRecvCallback;
+
         if (mOnRecvCallback == null) {
-            return;
+            return result;
         }
 
         mOnRecvCallback = null;
@@ -88,6 +92,8 @@ class NonBlockingConnection {
 
         int newOps = mKey.interestOps() & ~SelectionKey.OP_READ;
         mKey.interestOps(newOps);
+
+        return result;
     }
 
     /**
