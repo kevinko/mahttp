@@ -92,6 +92,13 @@ class HttpConnection {
         mState = State.REQUEST_START;
     }
 
+    /**
+     * @return the underlying NonBlockingConnection.
+     */
+    public NonBlockingConnection getNonBlockingConnection() {
+        return mConn;
+    }
+
     private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
         boolean done = false;
         do {
