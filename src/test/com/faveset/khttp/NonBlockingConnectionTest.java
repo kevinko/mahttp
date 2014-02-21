@@ -43,7 +43,10 @@ public class NonBlockingConnectionTest {
 
         public void run() {
             try {
-                ServerSocket listenSock = new ServerSocket(sListenPort);
+                ServerSocket listenSock = new ServerSocket();
+                listenSock.setReuseAddress(true);
+                SocketAddress sa = new InetSocketAddress("127.0.0.1", sListenPort);
+                listenSock.bind(sa);
 
                 synchronized (mSignal) {
                     mSignal.notify();
@@ -79,6 +82,8 @@ public class NonBlockingConnectionTest {
         }
 
         protected abstract void prepareConn(NonBlockingConnection conn);
+
+        protected void finish() {}
 
         public void run() throws IOException, InterruptedException {
             Object signal = new Object();
@@ -116,6 +121,8 @@ public class NonBlockingConnectionTest {
             selector.close();
 
             server.join();
+
+            finish();
         }
     }
 
@@ -324,11 +331,13 @@ public class NonBlockingConnectionTest {
         tester.run();
     }
 
+    @Test
     public void testSendPartial() throws IOException, InterruptedException {
-        final String expectedString = makeTestString(65535);
+        int len = 1 << 20;
+        final String expectedString = makeTestString(len - 1);
         final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
 
-        Tester tester = new Tester(makeRecvTask(expectedString), 65536) {
+        Tester tester = new Tester(makeRecvTask(expectedString), len) {
             @Override
             protected void prepareConn(NonBlockingConnection conn) {
                 ByteBuffer outBuf = conn.getOutBuffer();
@@ -355,6 +364,45 @@ public class NonBlockingConnectionTest {
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
+                    }
+                });
+            }
+        };
+
+        tester.run();
+    }
+
+    @Test
+    public void testRecvClose() throws IOException, InterruptedException {
+        final String expectedString = makeTestString(65535);
+        final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
+
+        Tester tester = new Tester(makeSendTask(expectedString), 65536) {
+            private int mCloseCount = 0;
+
+            @Override
+            protected void finish() {
+                super.finish();
+
+                assertEquals(1, mCloseCount);
+            }
+
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
+                    public void onClose(NonBlockingConnection conn) {
+                        mCloseCount++;
+
+                        try {
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+
+                conn.recv(new NonBlockingConnection.OnRecvCallback() {
+                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
                     }
                 });
             }
