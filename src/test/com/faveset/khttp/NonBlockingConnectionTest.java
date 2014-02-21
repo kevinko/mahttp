@@ -112,9 +112,8 @@ public class NonBlockingConnectionTest {
                 Set<SelectionKey> readyKeys = selector.keys();
 
                 for (SelectionKey key : readyKeys) {
-                    if (key.equals(connKey)) {
-                        conn.onSelect();
-                    }
+                    SelectorHandler handler = (SelectorHandler) key.attachment();
+                    handler.onReady(key);
                 }
             }
 

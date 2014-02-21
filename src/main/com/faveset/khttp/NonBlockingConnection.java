@@ -60,17 +60,27 @@ class NonBlockingConnection {
     private OnRecvCallback mOnRecvCallback;
     private OnSendCallback mOnSendCallback;
 
+    private SelectorHandler mSelectorHandler = new SelectorHandler() {
+        public void onReady(SelectionKey key) throws IOException {
+            onSelect();
+        }
+    };
+
     private boolean mIsRecvPersistent;
 
     private SendType mSendType;
 
     /**
+     * The NonBlockingConnection manages registration of Selector interest.
+     * A SelectorHandler will be attached to all Selector keys.
+     *
      * @bufferSize size in bytes for the send and receive buffers.
      */
     public NonBlockingConnection(Selector selector, SocketChannel chan, int bufferSize) throws IOException {
         chan.configureBlocking(false);
         mChan = chan;
         mKey = mChan.register(selector, 0);
+        mKey.attach(mSelectorHandler);
 
         mInBuffer = ByteBuffer.allocateDirect(bufferSize);
         mOutBufferInternal = ByteBuffer.allocateDirect(bufferSize);
@@ -236,12 +246,13 @@ class NonBlockingConnection {
 
     /**
      * This should be called when the Selector selects the key managed by the
-     * connection.
+     * connection.  We enforce this by associating a SelectorHandler with each
+     * key.
      *
      * @throws IOException on any channel error.  The connection should
      * typically be closed explicitly with close() as a result.
      */
-    public void onSelect() throws IOException {
+    private void onSelect() throws IOException {
         SelectionKey key = mKey;
 
         if (key.isValid() && key.isReadable()) {
