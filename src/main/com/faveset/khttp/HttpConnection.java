@@ -65,6 +65,13 @@ class HttpConnection {
 
     private State mState;
 
+    private NonBlockingConnection.OnCloseCallback mCloseCallback =
+        new NonBlockingConnection.OnCloseCallback() {
+            public void onClose(NonBlockingConnection conn) {
+                handleClose(conn);
+            }
+        };
+
     private NonBlockingConnection.OnRecvCallback mRecvCallback =
         new NonBlockingConnection.OnRecvCallback() {
             public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
@@ -93,10 +100,24 @@ class HttpConnection {
     }
 
     /**
+     * Closes the connection and releases all resources.
+     */
+    public void close() {
+        mConn.close();
+    }
+
+    /**
      * @return the underlying NonBlockingConnection.
      */
     public NonBlockingConnection getNonBlockingConnection() {
         return mConn;
+    }
+
+    /**
+     * Handle read closes.
+     */
+    private void handleClose(NonBlockingConnection conn) {
+        close();
     }
 
     private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
@@ -233,6 +254,7 @@ class HttpConnection {
     public void start(Map<String, HttpHandler> handlers) {
         mHttpHandlerMap = handlers;
 
+        mConn.setOnCloseCallback(mCloseCallback);
         mConn.recvPersistent(mRecvCallback);
     }
 
