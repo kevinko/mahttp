@@ -55,6 +55,7 @@ public class HeadersTest extends Headers {
         Helper.compare(buf, "Hello: world\r\n");
     }
 
+    @Test
     public void testWritePool() {
         ByteBufferPool pool = new ByteBufferPool(4, false);
 
