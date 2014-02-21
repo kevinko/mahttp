@@ -67,7 +67,7 @@ class HttpConnection {
 
     private NonBlockingConnection.OnCloseCallback mCloseCallback =
         new NonBlockingConnection.OnCloseCallback() {
-            public void onClose(NonBlockingConnection conn) {
+            public void onClose(NonBlockingConnection conn) throws IOException {
                 handleClose(conn);
             }
         };
@@ -102,7 +102,7 @@ class HttpConnection {
     /**
      * Closes the connection and releases all resources.
      */
-    public void close() {
+    public void close() throws IOException {
         mConn.close();
     }
 
@@ -116,7 +116,7 @@ class HttpConnection {
     /**
      * Handle read closes.
      */
-    private void handleClose(NonBlockingConnection conn) {
+    private void handleClose(NonBlockingConnection conn) throws IOException {
         close();
     }
 

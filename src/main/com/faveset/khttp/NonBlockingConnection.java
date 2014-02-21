@@ -17,7 +17,7 @@ class NonBlockingConnection {
      * manifest in different ways (various IOExceptions).
      */
     public interface OnCloseCallback {
-        void onClose(NonBlockingConnection conn);
+        void onClose(NonBlockingConnection conn) throws IOException;
     }
 
     /**
