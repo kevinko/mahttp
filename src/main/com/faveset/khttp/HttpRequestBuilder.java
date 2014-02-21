@@ -17,6 +17,8 @@ class HttpRequestBuilder extends HttpRequest {
     }
 
     public void clear() {
+        super.clear();
+
         mHeadersBuilder.clear();
         mMethod = Method.GET;
         mUri = "";
