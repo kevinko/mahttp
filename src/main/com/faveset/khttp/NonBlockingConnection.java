@@ -12,6 +12,9 @@ class NonBlockingConnection {
     /**
      * Called when the connection is closed by the peer.  The callback should
      * call close().
+     *
+     * Socket closes are only detected on read, because send errors can
+     * manifest in different ways (various IOExceptions).
      */
     public interface OnCloseCallback {
         void onClose(NonBlockingConnection conn);
@@ -231,8 +234,13 @@ class NonBlockingConnection {
         }
     }
 
-    // This will be called when the Selector selects the key managed by the
-    // connection.
+    /**
+     * This should be called when the Selector selects the key managed by the
+     * connection.
+     *
+     * @throws IOException on any channel error.  The connection should
+     * typically be closed explicitly with close() as a result.
+     */
     public void onSelect() throws IOException {
         SelectionKey key = mKey;
 

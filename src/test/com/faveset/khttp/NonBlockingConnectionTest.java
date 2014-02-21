@@ -226,6 +226,40 @@ public class NonBlockingConnectionTest {
         };
     }
 
+    /**
+     * Closes the connection after closeBytes is received.
+     */
+    private ServerThread.Task makeRecvCloseTask(final String expectedStr, final int closeBytes) {
+        return new ServerThread.Task() {
+            public void run(Socket sock) {
+                int recvLen = closeBytes;
+                if (recvLen > expectedStr.length()) {
+                    recvLen = expectedStr.length();
+                }
+
+                try {
+                    InputStream is = sock.getInputStream();
+                    byte[] data = new byte[recvLen];
+
+                    int count = 0;
+                    while (count < recvLen) {
+                        int remLen = recvLen - count;
+                        int len = is.read(data, count, remLen);
+                        count += len;
+                    }
+
+                    String s = new String(data, sUsAsciiCharset);
+                    assertEquals(expectedStr.substring(0, recvLen), s);
+
+                    // Now, force a connection close.
+                    sock.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        };
+    }
+
     private ServerThread.Task makeSendTask(final String testStr) {
         return new ServerThread.Task() {
             public void run(Socket sock) {
@@ -403,6 +437,55 @@ public class NonBlockingConnectionTest {
 
                 conn.recv(new NonBlockingConnection.OnRecvCallback() {
                     public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                    }
+                });
+            }
+        };
+
+        tester.run();
+    }
+
+    // Expect some sort of write exception.
+    @Test(expected=IOException.class)
+    public void testSendClose() throws IOException, InterruptedException {
+        // Pick a large value that won't fit in a socket buffer.
+        int bufLen = 1 << 20;
+        final String expectedString = makeTestString(bufLen - 1);
+        final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
+
+        Tester tester = new Tester(makeRecvCloseTask(expectedString, 1024), bufLen) {
+            private int mCloseCount = 0;
+
+            @Override
+            protected void finish() {
+                super.finish();
+
+                // NOTE: closes are just for receives, so send closes
+                // should not show up.
+                assertEquals(0, mCloseCount);
+            }
+
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
+                    public void onClose(NonBlockingConnection conn) {
+                        mCloseCount++;
+
+                        try {
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+
+                ByteBuffer outBuf = conn.getOutBuffer();
+                outBuf.put(buf);
+                outBuf.flip();
+
+                conn.send(new NonBlockingConnection.OnSendCallback() {
+                    public void onSend(NonBlockingConnection conn) {
+                        assertTrue(false);
                     }
                 });
             }
