@@ -13,6 +13,14 @@ import java.util.Map;
 
 // Handles an HTTP request in non-blocking fashion.
 class HttpConnection {
+    /**
+     * Called when the HttpConnection is closed.  The caller should call
+     * close() to clean up.
+     */
+    public interface OnCloseCallback {
+        void onClose(HttpConnection conn);
+    }
+
     private enum State {
         // Request start line.
         REQUEST_START,
@@ -65,14 +73,16 @@ class HttpConnection {
 
     private State mState;
 
-    private NonBlockingConnection.OnCloseCallback mCloseCallback =
+    private OnCloseCallback mOnCloseCallback;
+
+    private NonBlockingConnection.OnCloseCallback mNbcCloseCallback =
         new NonBlockingConnection.OnCloseCallback() {
             public void onClose(NonBlockingConnection conn) throws IOException {
                 handleClose(conn);
             }
         };
 
-    private NonBlockingConnection.OnRecvCallback mRecvCallback =
+    private NonBlockingConnection.OnRecvCallback mNbcRecvCallback =
         new NonBlockingConnection.OnRecvCallback() {
             public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
                 handleRecv(conn, buf);
@@ -93,6 +103,11 @@ class HttpConnection {
             }
         };
 
+    /**
+     * The HttpConnection will manage registration of selector keys.
+     * A SelectorHandler will be attached to selector keys for handling
+     * by callers.
+     */
     public HttpConnection(Selector selector, SocketChannel chan) throws IOException {
         mConn = new NonBlockingConnection(selector, chan, BUFFER_SIZE);
         mHandlerState = new HandlerState().setOnRequestCallback(mRequestCallback);
@@ -117,7 +132,11 @@ class HttpConnection {
      * Handle read closes.
      */
     private void handleClose(NonBlockingConnection conn) throws IOException {
-        close();
+        conn.close();
+
+        if (mOnCloseCallback != null) {
+            mOnCloseCallback.onClose(this);
+        }
     }
 
     private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
@@ -162,7 +181,7 @@ class HttpConnection {
         mState = State.REQUEST_START;
 
         // Restart the receive, now that we're at the start state.
-        mConn.recvPersistent(mRecvCallback);
+        mConn.recvPersistent(mNbcRecvCallback);
     }
 
     /**
@@ -247,6 +266,18 @@ class HttpConnection {
     }
 
     /**
+     * Assigns the callback that will be called when the connection is closed.
+     *
+     * Use this for cleaning up any external dependencies on the
+     * HttpConnection.
+     *
+     * The recipient should close the HttpConnection to clean up.
+     */
+    public void setOnCloseCallback(OnCloseCallback cb) {
+        mOnCloseCallback = cb;
+    }
+
+    /**
      * Start HttpConnection processing.
      *
      * @param handlers maps uris to HttpHandlers for handling requests.
@@ -254,8 +285,8 @@ class HttpConnection {
     public void start(Map<String, HttpHandler> handlers) {
         mHttpHandlerMap = handlers;
 
-        mConn.setOnCloseCallback(mCloseCallback);
-        mConn.recvPersistent(mRecvCallback);
+        mConn.setOnCloseCallback(mNbcCloseCallback);
+        mConn.recvPersistent(mNbcRecvCallback);
     }
 
     static {

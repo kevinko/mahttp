@@ -11,7 +11,7 @@ import java.nio.channels.SocketChannel;
 class NonBlockingConnection {
     /**
      * Called when the connection is closed by the peer.  The callback should
-     * call close().
+     * call close() to clean up.
      *
      * Socket closes are only detected on read, because send errors can
      * manifest in different ways (various IOExceptions).
