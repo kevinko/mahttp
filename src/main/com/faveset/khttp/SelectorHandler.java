@@ -9,6 +9,6 @@ import java.nio.channels.SelectionKey;
  * SelectorHandler callbacks are attached to SelectionKeys so that we have
  * a standardized interface for triggering actions.
  */
-public interface SelectorHandler {
+interface SelectorHandler {
     void onReady(SelectionKey key) throws IOException;
 }
