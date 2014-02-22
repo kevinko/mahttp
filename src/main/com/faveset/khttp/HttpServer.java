@@ -7,6 +7,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Set;
 
 import java.nio.channels.Selector;
@@ -16,27 +17,36 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
 class HttpServer {
-    public interface Handler {
-        void onRequest(HttpRequest req, HttpResponseWriter writer);
-    }
-
-    private interface SelectorHandler {
-        void onReady(SelectionKey key) throws IOException;
-    }
-
-    private Map<String, Handler> mHttpHandlerMap = new HashMap<String, Handler>();
-
-    private Map<SelectionKey, SelectorHandler> mSelectorHandlerMap = new HashMap<SelectionKey, SelectorHandler>();
+    private Map<String, HttpHandler> mHttpHandlerMap = new HashMap<String, HttpHandler>();
 
     private ServerSocketChannel mListenChan;
+    // A SelectorHandler will be attached to each SelectionKey registered
+    // with the Selector.
     private Selector mSelector;
 
-    public HttpServer() {
-        mHttpHandlerMap = new HashMap<String, Handler>();
-    }
+    private SelectorHandler mListenSelectorHandler = new SelectorHandler() {
+            public void onReady(SelectionKey key) throws IOException {
+                handleAccept(key.channel());
+            }
+    };
+
+    private Set<HttpConnection> mConnectionSet = new HashSet<HttpConnection>();
+
+    private HttpConnection.OnCloseCallback mCloseCallback = new HttpConnection.OnCloseCallback() {
+        public void onClose(HttpConnection conn) {
+            handleConnectionClose(conn);
+        }
+    };
+
+    public HttpServer() {}
 
     public void close() throws IOException {
         mListenChan.close();
+
+        for (HttpConnection conn : mConnectionSet) {
+            conn.close();
+        }
+        mConnectionSet.clear();
 
         mSelector.close();
     }
@@ -45,16 +55,17 @@ class HttpServer {
         ServerSocketChannel chan = (ServerSocketChannel) chanArg;
 
         SocketChannel newChan = chan.accept();
-        newChan.configureBlocking(false);
 
-        // Prepare buffers for read/write processing over the channel.
-        SelectionKey key = newChan.register(mSelector, SelectionKey.OP_READ);
-        registerSelectorHandler(key, new SelectorHandler() {
-            public void onReady(SelectionKey key) throws IOException {
-                // TODO
-                //handleHttp(chan, attach);
-            }
-        });
+        HttpConnection conn = new HttpConnection(mSelector, newChan);
+        conn.start(mHttpHandlerMap);
+        conn.setOnCloseCallback(mCloseCallback);
+
+        mConnectionSet.add(conn);
+    }
+
+    private void handleConnectionClose(HttpConnection conn) {
+        conn.close();
+        mConnectionSet.remove(conn);
     }
 
     public void listenAndServe(String listenAddr, int port) throws IllegalArgumentException, IOException {
@@ -68,11 +79,7 @@ class HttpServer {
 
         mSelector = Selector.open();
         SelectionKey listenKey = mListenChan.register(mSelector, SelectionKey.OP_ACCEPT);
-        registerSelectorHandler(listenKey, new SelectorHandler() {
-            public void onReady(SelectionKey key) throws IOException {
-                handleAccept(key.channel());
-            }
-        });
+        listenKey.attach(mListenSelectorHandler);
 
         while (true) {
             int readyCount = mSelector.select();
@@ -87,7 +94,7 @@ class HttpServer {
                     continue;
                 }
 
-                SelectorHandler handler = mSelectorHandlerMap.get(key);
+                SelectorHandler handler = (SelectorHandler) key.attachment();
                 handler.onReady(key);
             }
         }
@@ -95,15 +102,11 @@ class HttpServer {
         mSelector.close();
     }
 
-    public void registerGet(String url, Handler handler) {
+    public void registerHandler(String url, HttpHandler handler) {
         mHttpHandlerMap.put(url, handler);
     }
 
-    private void registerSelectorHandler(SelectionKey key, SelectorHandler handler) {
-        mSelectorHandlerMap.put(key, handler);
-    }
-
-    private void unregisterSelectorHandler(SelectionKey key) {
-        mSelectorHandlerMap.remove(key);
+    public void unregisterHandler(String url) {
+        mHttpHandlerMap.remove(url);
     }
 };
