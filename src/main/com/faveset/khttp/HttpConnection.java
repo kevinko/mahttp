@@ -18,7 +18,7 @@ class HttpConnection {
      * close() to clean up.
      */
     public interface OnCloseCallback {
-        void onClose(HttpConnection conn);
+        void onClose(HttpConnection conn) throws IOException;
     }
 
     private enum State {

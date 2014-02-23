@@ -33,7 +33,7 @@ class HttpServer {
     private Set<HttpConnection> mConnectionSet = new HashSet<HttpConnection>();
 
     private HttpConnection.OnCloseCallback mCloseCallback = new HttpConnection.OnCloseCallback() {
-        public void onClose(HttpConnection conn) {
+        public void onClose(HttpConnection conn) throws IOException {
             handleConnectionClose(conn);
         }
     };
@@ -63,11 +63,15 @@ class HttpServer {
         mConnectionSet.add(conn);
     }
 
-    private void handleConnectionClose(HttpConnection conn) {
+    private void handleConnectionClose(HttpConnection conn) throws IOException {
         conn.close();
         mConnectionSet.remove(conn);
     }
 
+    /**
+     * Starts the HTTP server and begins listening on the given address and
+     * port.  This only returns if stop() is called by another thread.
+     */
     public void listenAndServe(String listenAddr, int port) throws IllegalArgumentException, IOException {
         InetSocketAddress sa = new InetSocketAddress(listenAddr, port);
 
