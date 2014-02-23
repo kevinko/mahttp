@@ -103,11 +103,18 @@ class HttpServer {
             }
         }
 
-        mSelector.close();
+        close();
     }
 
     public void registerHandler(String url, HttpHandler handler) {
         mHttpHandlerMap.put(url, handler);
+    }
+
+    /**
+     * Threadsafe method for stopping the HttpServer.
+     */
+    public synchronized void stop() {
+        mSelector.wakeup();
     }
 
     public void unregisterHandler(String url) {
