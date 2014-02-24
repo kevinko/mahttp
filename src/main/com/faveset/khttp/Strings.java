@@ -17,6 +17,25 @@ class Strings {
     private static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
 
     /**
+     * Returns a String created from buf at buf's current position using its
+     * remaining length.
+     */
+    private static String byteBufferToString(ByteBuffer buf) {
+        if (buf.hasArray()) {
+            int offset = buf.arrayOffset() + buf.position();
+            return new String(buf.array(), offset, buf.remaining(), sUsAsciiCharset);
+        }
+
+        byte[] data = new byte[buf.remaining()];
+
+        buf.mark();
+        buf.get(data);
+        buf.reset();
+
+        return new String(data, sUsAsciiCharset);
+    }
+
+    /**
      * This also handles bare '\n', which might be erroneously passed by some
      * clients.
      *
@@ -239,7 +258,7 @@ class Strings {
         }
 
         result.limit(buf.position());
-        return new String(result.array(), result.position(), result.remaining(), sUsAsciiCharset);
+        return byteBufferToString(result);
     }
 
     /**
@@ -263,7 +282,7 @@ class Strings {
         }
 
         result.limit(buf.position());
-        return new String(result.array(), result.position(), result.remaining(), sUsAsciiCharset);
+        return byteBufferToString(result);
     }
 
     /**
@@ -322,7 +341,8 @@ class Strings {
             }
         }
 
-        return new String(result.array(), result.position(), result.remaining(), sUsAsciiCharset);
+        // Support direct buffers by creating an explicit byte buffer.
+        return byteBufferToString(result);
     }
 
     /**
