@@ -167,6 +167,14 @@ class NonBlockingConnection {
             }
             return;
         }
+        if (len == 0) {
+            // Even though we use a selector, it is possible for a 0 length
+            // read, as the selection is merely a hint.
+            //
+            // Wait for another round.
+            return;
+        }
+
         // Ensure that the callback accesses the buffer contents from the start.
         mInBuffer.flip();
 
@@ -212,7 +220,12 @@ class NonBlockingConnection {
             return;
         }
 
-        mChan.write(mOutBuffer);
+        int len = mChan.write(mOutBuffer);
+        if (len == 0) {
+            // The selection key hint was incorrect.  Just wait for another
+            // round.
+            return;
+        }
 
         if (mOutBuffer.hasRemaining()) {
             if (mSendType == SendType.INTERNAL_PARTIAL) {
@@ -272,6 +285,8 @@ class NonBlockingConnection {
      *
      * NOTE: the buffer that is passed to the callback (the internal in buffer)
      * is only guaranteed for the life of the callback.
+     *
+     * The in buffer will also be cleared when the recv is performed.
      */
     public void recv(OnRecvCallback callback) {
         recvImpl(callback, false);
@@ -316,12 +331,11 @@ class NonBlockingConnection {
      * be called when the buffer is completely drained.  The buffer will not
      * be compacted, cleared, or otherwise modified.  The callback is not
      * persistent.
+     *
+     * @throws IOException
      */
-    public void send(OnSendCallback callback) {
-        mSendType = SendType.INTERNAL;
-        mOutBuffer = mOutBufferInternal;
-
-        registerSendCallback(callback);
+    public void send(OnSendCallback callback) throws IOException {
+        sendImpl(SendType.INTERNAL, mOutBufferInternal, callback);
     }
 
     /**
@@ -333,12 +347,11 @@ class NonBlockingConnection {
      * progress, since the contents are not copied.
      *
      * @param callback will be called on completion.
+     *
+     * @throws IOException
      */
-    public void send(OnSendCallback callback, ByteBuffer buf) {
-        mSendType = SendType.EXTERNAL_SINGLE;
-        mOutBuffer = buf;
-
-        registerSendCallback(callback);
+    public void send(OnSendCallback callback, ByteBuffer buf) throws IOException {
+        sendImpl(SendType.EXTERNAL_SINGLE, buf, callback);
     }
 
     /**
@@ -347,8 +360,10 @@ class NonBlockingConnection {
      *
      * @param bufsRemaining is the total number of bytes remaining for bufs.
      * Set to 0 to calculate automatically.
+     *
+     * @throws IOException
      */
-    public void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining) {
+    public void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining) throws IOException {
         mSendType = SendType.EXTERNAL_MULTIPLE;
         mExternalOutBuffers = bufs;
 
@@ -358,9 +373,50 @@ class NonBlockingConnection {
             }
         }
 
+        if (bufsRemaining == 0) {
+            // We're done.
+            if (callback != null) {
+                callback.onSend(this);
+            }
+            return;
+        }
+
         mExternalOutBuffersRemaining = bufsRemaining;
 
         registerSendCallback(callback);
+
+        // Opportunistically attempt a write.
+        handleWrite();
+    }
+
+    /**
+     * Schedules the contents of the given buffer for sending.  Callback will
+     * be called when the buffer is completely drained (immediately if the
+     * buffer is empty).  The buffer will not be compacted, cleared, or
+     * otherwise modified.  The callback is not persistent.
+     *
+     * @param type the SendType to use
+     * @param buf
+     * @param callback
+     *
+     * @throws IOException
+     */
+    private void sendImpl(SendType type, ByteBuffer buf, OnSendCallback callback) throws IOException {
+        mSendType = type;
+        mOutBuffer = buf;
+
+        if (!mOutBuffer.hasRemaining()) {
+            // We're done.
+            if (callback != null) {
+                callback.onSend(this);
+            }
+            return;
+        }
+
+        registerSendCallback(callback);
+
+        // Opportunistically attempt a write.
+        handleWrite();
     }
 
     /**
@@ -371,12 +427,11 @@ class NonBlockingConnection {
      *
      * If a send is called during the callback, it will take priority over
      * whatever remains in the internal buffer.
+     *
+     * @throws IOException
      */
-    public void sendPartial(OnSendCallback callback) {
-        mSendType = SendType.INTERNAL_PARTIAL;
-        mOutBuffer = mOutBufferInternal;
-
-        registerSendCallback(callback);
+    public void sendPartial(OnSendCallback callback) throws IOException {
+        sendImpl(SendType.INTERNAL_PARTIAL, mOutBufferInternal, callback);
     }
 
     /**
