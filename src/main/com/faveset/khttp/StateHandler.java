@@ -17,6 +17,8 @@ interface StateHandler {
      *
      * @return true if the state is complete.  False if more data is needed
      * in buf to proceed.
+     *
+     * @throws InvalidRequestException
      */
     boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException;
 }
