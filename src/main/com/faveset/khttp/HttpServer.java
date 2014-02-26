@@ -96,8 +96,8 @@ class HttpServer {
             return;
         }
 
-        conn.start(mHttpHandlerMap);
         conn.setOnCloseCallback(mCloseCallback);
+        conn.start(mHttpHandlerMap);
 
         mConnectionSet.add(conn);
     }
