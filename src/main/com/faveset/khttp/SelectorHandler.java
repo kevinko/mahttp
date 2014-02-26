@@ -2,7 +2,6 @@
 
 package com.faveset.khttp;
 
-import java.io.IOException;
 import java.nio.channels.SelectionKey;
 
 /**
@@ -10,5 +9,5 @@ import java.nio.channels.SelectionKey;
  * a standardized interface for triggering actions.
  */
 interface SelectorHandler {
-    void onReady(SelectionKey key) throws IOException;
+    void onReady(SelectionKey key);
 }
