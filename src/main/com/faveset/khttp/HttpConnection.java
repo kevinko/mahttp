@@ -11,14 +11,21 @@ import java.nio.channels.SocketChannel;
 import java.util.EnumMap;
 import java.util.Map;
 
+import com.faveset.log.Log;
+import com.faveset.log.NullLog;
+
 // Handles an HTTP request in non-blocking fashion.
 class HttpConnection {
+    private static final String sTag = HttpConnection.class.toString();
+
+    private Log mLog = new NullLog();
+
     /**
      * Called when the HttpConnection is closed.  The caller should call
      * close() to clean up.
      */
     public interface OnCloseCallback {
-        void onClose(HttpConnection conn) throws IOException;
+        void onClose(HttpConnection conn);
     }
 
     private enum State {
@@ -77,8 +84,15 @@ class HttpConnection {
 
     private NonBlockingConnection.OnCloseCallback mNbcCloseCallback =
         new NonBlockingConnection.OnCloseCallback() {
-            public void onClose(NonBlockingConnection conn) throws IOException {
+            public void onClose(NonBlockingConnection conn) {
                 handleClose(conn);
+            }
+        };
+
+    private NonBlockingConnection.OnErrorCallback mNbcErrorCallback =
+        new NonBlockingConnection.OnErrorCallback() {
+            public void onError(NonBlockingConnection conn, String reason) {
+                handleError(conn, reason);
             }
         };
 
@@ -110,6 +124,7 @@ class HttpConnection {
      */
     public HttpConnection(Selector selector, SocketChannel chan) throws IOException {
         mConn = new NonBlockingConnection(selector, chan, BUFFER_SIZE);
+
         mHandlerState = new HandlerState().setOnRequestCallback(mRequestCallback);
         mState = State.REQUEST_START;
     }
@@ -131,12 +146,23 @@ class HttpConnection {
     /**
      * Handle read closes.
      */
-    private void handleClose(NonBlockingConnection conn) throws IOException {
-        conn.close();
+    private void handleClose(NonBlockingConnection conn) {
+        try {
+            conn.close();
+        } catch (IOException e) {
+            // Just warn and continue clean-up.
+            mLog.e(sTag, "failed to close connection during shutdown", e);
+        }
 
         if (mOnCloseCallback != null) {
             mOnCloseCallback.onClose(this);
         }
+    }
+
+    private void handleError(NonBlockingConnection conn, String reason) {
+        mLog.e(sTag, "error with connection, closing: " + reason);
+
+        handleClose(conn);
     }
 
     private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
@@ -266,6 +292,13 @@ class HttpConnection {
     }
 
     /**
+     * Configures the HttpConnection to log output to log.
+     */
+    public void setLog(Log log) {
+        mLog = log;
+    }
+
+    /**
      * Assigns the callback that will be called when the connection is closed.
      *
      * Use this for cleaning up any external dependencies on the
@@ -285,7 +318,10 @@ class HttpConnection {
     public void start(Map<String, HttpHandler> handlers) {
         mHttpHandlerMap = handlers;
 
+        // Configure all callbacks.
         mConn.setOnCloseCallback(mNbcCloseCallback);
+        mConn.setOnErrorCallback(mNbcErrorCallback);
+
         mConn.recvPersistent(mNbcRecvCallback);
     }
 
