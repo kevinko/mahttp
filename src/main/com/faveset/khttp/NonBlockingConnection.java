@@ -17,7 +17,15 @@ class NonBlockingConnection {
      * manifest in different ways (various IOExceptions).
      */
     public interface OnCloseCallback {
-        void onClose(NonBlockingConnection conn) throws IOException;
+        void onClose(NonBlockingConnection conn);
+    }
+
+    /**
+     * Called whenever an unrecoverable error (e.g., IOException) occurs
+     * while reading/writing the underlying socket.
+     */
+    public interface OnErrorCallback {
+        void onError(NonBlockingConnection conn, String reason);
     }
 
     /**
@@ -54,6 +62,7 @@ class NonBlockingConnection {
     private long mExternalOutBuffersRemaining;
 
     private OnCloseCallback mOnCloseCallback;
+    private OnErrorCallback mOnErrorCallback;
 
     // INVARIANT: these callbacks are non-null iff a recv/send is scheduled
     // with the Selector.
@@ -61,7 +70,7 @@ class NonBlockingConnection {
     private OnSendCallback mOnSendCallback;
 
     private SelectorHandler mSelectorHandler = new SelectorHandler() {
-        public void onReady(SelectionKey key) throws IOException {
+        public void onReady(SelectionKey key) {
             onSelect();
         }
     };
@@ -75,6 +84,8 @@ class NonBlockingConnection {
      * A SelectorHandler will be attached to all Selector keys.
      *
      * @bufferSize size in bytes for the send and receive buffers.
+     *
+     * @throws IOException on I/O error.
      */
     public NonBlockingConnection(Selector selector, SocketChannel chan, int bufferSize) throws IOException {
         chan.configureBlocking(false);
@@ -130,6 +141,8 @@ class NonBlockingConnection {
     /**
      * Closes the underlying channel.  This should be called to clean up
      * resources.
+     *
+     * @throws IOException if the underlying socket experienced an I/O error.
      */
     public void close() throws IOException {
         mChan.close();
@@ -261,19 +274,22 @@ class NonBlockingConnection {
      * This should be called when the Selector selects the key managed by the
      * connection.  We enforce this by associating a SelectorHandler with each
      * key.
-     *
-     * @throws IOException on any channel error.  The connection should
-     * typically be closed explicitly with close() as a result.
      */
-    private void onSelect() throws IOException {
-        SelectionKey key = mKey;
+    private void onSelect() {
+        try {
+            SelectionKey key = mKey;
 
-        if (key.isValid() && key.isReadable()) {
-            handleRead();
-        }
+            if (key.isValid() && key.isReadable()) {
+                handleRead();
+            }
 
-        if (key.isValid() && key.isWritable()) {
-            handleWrite();
+            if (key.isValid() && key.isWritable()) {
+                handleWrite();
+            }
+        } catch (IOException e) {
+            if (mOnErrorCallback != null) {
+                mOnErrorCallback.onError(this, e.toString());
+            }
         }
     }
 
@@ -331,10 +347,8 @@ class NonBlockingConnection {
      * be called when the buffer is completely drained.  The buffer will not
      * be compacted, cleared, or otherwise modified.  The callback is not
      * persistent.
-     *
-     * @throws IOException
      */
-    public void send(OnSendCallback callback) throws IOException {
+    public void send(OnSendCallback callback) {
         sendImpl(SendType.INTERNAL, mOutBufferInternal, callback);
     }
 
@@ -347,10 +361,8 @@ class NonBlockingConnection {
      * progress, since the contents are not copied.
      *
      * @param callback will be called on completion.
-     *
-     * @throws IOException
      */
-    public void send(OnSendCallback callback, ByteBuffer buf) throws IOException {
+    public void send(OnSendCallback callback, ByteBuffer buf) {
         sendImpl(SendType.EXTERNAL_SINGLE, buf, callback);
     }
 
@@ -360,10 +372,8 @@ class NonBlockingConnection {
      *
      * @param bufsRemaining is the total number of bytes remaining for bufs.
      * Set to 0 to calculate automatically.
-     *
-     * @throws IOException
      */
-    public void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining) throws IOException {
+    public void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining) {
         mSendType = SendType.EXTERNAL_MULTIPLE;
         mExternalOutBuffers = bufs;
 
@@ -384,9 +394,6 @@ class NonBlockingConnection {
         mExternalOutBuffersRemaining = bufsRemaining;
 
         registerSendCallback(callback);
-
-        // Opportunistically attempt a write.
-        handleWrite();
     }
 
     /**
@@ -398,10 +405,8 @@ class NonBlockingConnection {
      * @param type the SendType to use
      * @param buf
      * @param callback
-     *
-     * @throws IOException
      */
-    private void sendImpl(SendType type, ByteBuffer buf, OnSendCallback callback) throws IOException {
+    private void sendImpl(SendType type, ByteBuffer buf, OnSendCallback callback) {
         mSendType = type;
         mOutBuffer = buf;
 
@@ -414,9 +419,6 @@ class NonBlockingConnection {
         }
 
         registerSendCallback(callback);
-
-        // Opportunistically attempt a write.
-        handleWrite();
     }
 
     /**
@@ -427,19 +429,30 @@ class NonBlockingConnection {
      *
      * If a send is called during the callback, it will take priority over
      * whatever remains in the internal buffer.
-     *
-     * @throws IOException
      */
-    public void sendPartial(OnSendCallback callback) throws IOException {
+    public void sendPartial(OnSendCallback callback) {
         sendImpl(SendType.INTERNAL_PARTIAL, mOutBufferInternal, callback);
     }
 
     /**
      * Configures the callback that will be called when the connection is
      * closed.
+     *
+     * @return this for chaining
      */
     public NonBlockingConnection setOnCloseCallback(OnCloseCallback callback) {
         mOnCloseCallback = callback;
+        return this;
+    }
+
+    /**
+     * Configures the callback that will be called when an unrecoverable
+     * network error is encountered.
+     *
+     * @return this for chaining
+     */
+    public NonBlockingConnection setOnErrorCallback(OnErrorCallback callback) {
+        mOnErrorCallback = callback;
         return this;
     }
 }
