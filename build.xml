@@ -1,4 +1,5 @@
 <project name="khttp">
+	<property name="debug" value="off" />
 	<property name="build.dir" value="build" />
 	<property name="classes.dir" value="${build.dir}/classes/main" />
 	<property name="test-classes.dir" value="${build.dir}/classes/test" />
@@ -21,12 +22,12 @@
 
 	<target name="compile-main">
 		<mkdir dir="${classes.dir}" />
-		<javac includeantruntime="false" srcdir="${main.srcdir}" destdir="${classes.dir}" />
+		<javac debug="${debug}" includeantruntime="false" srcdir="${main.srcdir}" destdir="${classes.dir}" />
 	</target>
 
 	<target name="compile-test" depends="compile-main">
 		<mkdir dir="${test-classes.dir}" />
-		<javac debug="on" includeantruntime="false" srcdir="${test.srcdir}" destdir="${test-classes.dir}">
+		<javac debug="${debug}" includeantruntime="false" srcdir="${test.srcdir}" destdir="${test-classes.dir}">
 			<classpath>
 				<pathelement path="${junit-jarfile}" />
 				<pathelement path="${classes.dir}" />
