@@ -8,23 +8,23 @@ package com.faveset.log;
 public class NullLog implements Log {
     public NullLog() {}
 
-    public int d(String tag, String msg) {}
+    public int d(String tag, String msg) { return 0; }
 
-    public int d(String tag, String msg, Throwable tr) {}
+    public int d(String tag, String msg, Throwable tr) { return 0; }
 
-    public int e(String tag, String msg) {}
+    public int e(String tag, String msg) { return 0; }
 
-    public int e(String tag, String msg, Throwable tr) {}
+    public int e(String tag, String msg, Throwable tr) { return 0; }
 
-    public int i(String tag, String msg) {}
+    public int i(String tag, String msg) { return 0; }
 
-    public int i(String tag, String msg, Throwable tr) {}
+    public int i(String tag, String msg, Throwable tr) { return 0; }
 
-    public int v(String tag, String msg) {}
+    public int v(String tag, String msg) { return 0; }
 
-    public int v(String tag, String msg, Throwable tr) {}
+    public int v(String tag, String msg, Throwable tr) { return 0; }
 
-    public int w(String tag, String msg) {}
+    public int w(String tag, String msg) { return 0; }
 
-    public int w(String tag, String msg, Throwable tr) {}
+    public int w(String tag, String msg, Throwable tr) { return 0; }
 }
