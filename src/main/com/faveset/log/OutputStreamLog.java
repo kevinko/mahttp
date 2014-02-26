@@ -19,43 +19,63 @@ public class OutputStreamLog implements Log {
     }
 
     public synchronized int d(String tag, String msg) {
-        mWriter.append(makeString(sDebugLabel, tag, msg));
+        String s = makeString(sDebugLabel, tag, msg);
+        mWriter.append(s);
+        return s.length();
     }
 
     public synchronized int d(String tag, String msg, Throwable tr) {
-        mWriter.append(makeExceptionString(sDebugLabel, tag, msg, tr));
+        String s = makeExceptionString(sDebugLabel, tag, msg, tr);
+        mWriter.append(s);
+        return s.length();
     }
 
     public synchronized int e(String tag, String msg) {
-        mWriter.append(makeString(sErrorLabel, tag, msg));
+        String s = makeString(sErrorLabel, tag, msg);
+        mWriter.append(s);
+        return s.length();
     }
 
     public synchronized int e(String tag, String msg, Throwable tr) {
-        mWriter.append(makeExceptionString(sErrorLabel, tag, msg, tr));
+        String s = makeExceptionString(sErrorLabel, tag, msg, tr);
+        mWriter.append(s);
+        return s.length();
     }
 
     public synchronized int i(String tag, String msg) {
-        mWriter.append(makeString(sInfoLabel, tag, msg));
+        String s = makeString(sInfoLabel, tag, msg);
+        mWriter.append(s);
+        return s.length();
     }
 
     public synchronized int i(String tag, String msg, Throwable tr) {
-        mWriter.append(makeExceptionString(sInfoLabel, tag, msg, tr));
+        String s = makeExceptionString(sInfoLabel, tag, msg, tr);
+        mWriter.append(s);
+        return s.length();
     }
 
     public synchronized int v(String tag, String msg) {
-        mWriter.append(makeString(sVerboseLabel, tag, msg));
+        String s = makeString(sVerboseLabel, tag, msg);
+        mWriter.append(s);
+        return s.length();
     }
 
     public synchronized int v(String tag, String msg, Throwable tr) {
-        mWriter.append(makeExceptionString(sVerboseLabel, tag, msg, tr));
+        String s = makeExceptionString(sVerboseLabel, tag, msg, tr);
+        mWriter.append(s);
+        return s.length();
     }
 
     public synchronized int w(String tag, String msg) {
-        mWriter.append(makeString(sWarnLabel, tag, msg));
+        String s = makeString(sWarnLabel, tag, msg);
+        mWriter.append(s);
+        return s.length();
     }
 
     public synchronized int w(String tag, String msg, Throwable tr) {
-        mWriter.append(makeExceptionString(sWarnLabel, tag, msg, tr));
+        String s = makeExceptionString(sWarnLabel, tag, msg, tr);
+        mWriter.append(s);
+        return s.length();
     }
 
     private static String makeString(String label, String tag, String msg) {
