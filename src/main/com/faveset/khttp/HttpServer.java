@@ -16,7 +16,14 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
+import com.faveset.log.Log;
+import com.faveset.log.NullLog;
+
 class HttpServer {
+    private static final String sTag = HttpServer.class.toString();
+
+    private Log mLog = new NullLog();
+
     private Map<String, HttpHandler> mHttpHandlerMap = new HashMap<String, HttpHandler>();
 
     private ServerSocketChannel mListenChan;
@@ -25,15 +32,17 @@ class HttpServer {
     private Selector mSelector;
 
     private SelectorHandler mListenSelectorHandler = new SelectorHandler() {
-            public void onReady(SelectionKey key) throws IOException {
-                handleAccept(key.channel());
+            public void onReady(SelectionKey key) {
+                if (key.isValid() && key.isAcceptable()) {
+                    handleAccept(key.channel());
+                }
             }
     };
 
     private Set<HttpConnection> mConnectionSet = new HashSet<HttpConnection>();
 
     private HttpConnection.OnCloseCallback mCloseCallback = new HttpConnection.OnCloseCallback() {
-        public void onClose(HttpConnection conn) throws IOException {
+        public void onClose(HttpConnection conn) {
             handleConnectionClose(conn);
         }
     };
@@ -51,20 +60,57 @@ class HttpServer {
         mSelector.close();
     }
 
-    private void handleAccept(SelectableChannel chanArg) throws IOException {
+    private void handleAccept(SelectableChannel chanArg) {
         ServerSocketChannel chan = (ServerSocketChannel) chanArg;
 
-        SocketChannel newChan = chan.accept();
+        SocketChannel newChan;
+        try {
+            newChan = chan.accept();
+        } catch (IOException e) {
+            mLog.e(sTag, "accept failed; shutting down", e);
 
-        HttpConnection conn = new HttpConnection(mSelector, newChan);
+            // We have a serious problem, so just bring down the server.
+            stop();
+
+            return;
+        }
+
+        if (newChan == null) {
+            // The selection key hint was incorrect, as the channel is not
+            // ready to accept.
+            return;
+        }
+
+        HttpConnection conn;
+        try {
+            conn = new HttpConnection(mSelector, newChan);
+        } catch (IOException e) {
+            mLog.e(sTag, "could not create HttpConnection, closing", e);
+
+            try {
+                newChan.close();
+            } catch (IOException newChanE) {
+                mLog.e(sTag, "could not close channel, ignoring", newChanE);
+            }
+
+            return;
+        }
+
         conn.start(mHttpHandlerMap);
         conn.setOnCloseCallback(mCloseCallback);
 
         mConnectionSet.add(conn);
     }
 
-    private void handleConnectionClose(HttpConnection conn) throws IOException {
-        conn.close();
+    private void handleConnectionClose(HttpConnection conn) {
+        try {
+            conn.close();
+        } catch (IOException e) {
+            mLog.e(sTag, "connection close failed, continuing", e);
+
+            // We've tried our best to clean up.  It's safe to continue.
+        }
+
         mConnectionSet.remove(conn);
     }
 
@@ -82,8 +128,7 @@ class HttpServer {
         sock.bind(sa);
 
         mSelector = Selector.open();
-        SelectionKey listenKey = mListenChan.register(mSelector, SelectionKey.OP_ACCEPT);
-        listenKey.attach(mListenSelectorHandler);
+        SelectionKey listenKey = mListenChan.register(mSelector, SelectionKey.OP_ACCEPT, mListenSelectorHandler);
 
         while (true) {
             int readyCount = mSelector.select();
