@@ -444,8 +444,10 @@ public class NonBlockingConnectionTest {
         tester.run();
     }
 
-    // Expect some sort of write exception.
-    @Test(expected=IOException.class)
+    // Expect some sort of write error because of a premature close while
+    // sending.
+
+    @Test
     public void testSendClose() throws IOException, InterruptedException {
         // Pick a large value that won't fit in a socket buffer.
         int bufLen = 1 << 20;
@@ -454,6 +456,7 @@ public class NonBlockingConnectionTest {
 
         Tester tester = new Tester(makeRecvCloseTask(expectedString, 1024), bufLen) {
             private int mCloseCount = 0;
+            private int mErrorCount = 0;
 
             @Override
             protected void finish() {
@@ -462,6 +465,7 @@ public class NonBlockingConnectionTest {
                 // NOTE: closes are just for receives, so send closes
                 // should not show up.
                 assertEquals(0, mCloseCount);
+                assertEquals(1, mErrorCount);
             }
 
             @Override
@@ -469,6 +473,18 @@ public class NonBlockingConnectionTest {
                 conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
                     public void onClose(NonBlockingConnection conn) {
                         mCloseCount++;
+
+                        try {
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+
+                conn.setOnErrorCallback(new NonBlockingConnection.OnErrorCallback() {
+                    public void onError(NonBlockingConnection conn, String reason) {
+                        mErrorCount++;
 
                         try {
                             conn.close();
