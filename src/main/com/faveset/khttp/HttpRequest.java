@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 
 public class HttpRequest {
+    private static final int sDefaultMinorVersion = 1;
+
     enum BodyType {
         // Ignore the body (default for GET/HEAD)
         IGNORE,
@@ -44,6 +46,8 @@ public class HttpRequest {
 
     protected Headers mHeaders;
 
+    protected int mMinorVersion;
+
     private BodyType mBodyType;
     private OnBodyCopyCallback mOnBodyCopyCallback;
     private OnBodyReadCallback mOnBodyReadCallback;
@@ -51,6 +55,7 @@ public class HttpRequest {
     public HttpRequest() {
         mBodyType = BodyType.IGNORE;
         mHeaders = new Headers();
+        mMinorVersion = sDefaultMinorVersion;
     }
 
     protected void clear() {
@@ -103,5 +108,12 @@ public class HttpRequest {
     public void setBodyRead(OnBodyReadCallback callback) {
         mBodyType = BodyType.READ;
         mOnBodyReadCallback = callback;
+    }
+
+    /**
+     * @return a string representation of the request.
+     */
+    public String toString() {
+        return String.format("%s %s HTTP/1.%d", mMethod.name(), mUri, mMinorVersion);
     }
 }

@@ -35,4 +35,11 @@ class HttpRequestBuilder extends HttpRequest {
     public void setUri(String uri) {
         mUri = uri;
     }
+
+    /**
+     * Set the minor version of the HTTP protocol used in the request.
+     */
+    public void setVersion(int minor) {
+        mMinorVersion = minor;
+    }
 }
