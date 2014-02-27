@@ -15,8 +15,6 @@ class RequestStartHandler implements StateHandler {
      * line.
      */
     public boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
-        HttpRequestBuilder req = state.getRequestBuilder();
-
         // The spec allows for leading CRLFs.
         Strings.skipCrlf(buf);
 
@@ -32,6 +30,11 @@ class RequestStartHandler implements StateHandler {
             // Signal that more data is needed.
             return false;
         }
+
+        // We have a full line for parsing.  Populate the Request structure.
+        state.clear();
+
+        HttpRequestBuilder req = state.getRequestBuilder();
 
         try {
             HttpRequest.Method method = Strings.parseMethod(lineBuf);
@@ -57,8 +60,6 @@ class RequestStartHandler implements StateHandler {
         } catch (ParseException e) {
                 throw new InvalidRequestException("Could not parse HTTP version", HttpStatus.BAD_REQUEST);
         }
-
-        state.clear();
 
         return true;
     }

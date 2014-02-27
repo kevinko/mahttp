@@ -17,7 +17,7 @@ import java.nio.ByteBuffer;
 public class RequestStartHandlerTest {
     @Test
     public void testSimple() throws InvalidRequestException {
-        ByteBuffer buf = Helper.makeByteBuffer("GET / HTTP/1.1\n");
+        ByteBuffer buf = Helper.makeByteBuffer("GET / HTTP/1.0\n");
 
         HandlerState state = new HandlerState();
         HttpRequestBuilder req = state.getRequestBuilder();
@@ -31,6 +31,7 @@ public class RequestStartHandlerTest {
         // Headers should be cleared.
         assertEquals(null, headers.get("foo"));
         assertEquals("", state.getLastHeaderName());
+        assertEquals(0, req.getMinorVersion());
     }
 
     @Test(expected=InvalidRequestException.class)
@@ -59,6 +60,27 @@ public class RequestStartHandlerTest {
         buf.flip();
 
         assertTrue(handler.handleState(null, buf, state));
+
+        assertEquals(1, state.getRequestBuilder().getMinorVersion());
+    }
+
+    @Test
+    public void testPartial2() throws InvalidRequestException {
+        ByteBuffer buf = ByteBuffer.allocate(1024);
+        buf.put(Helper.makeByteBuffer("GET / HTTP/1.0"));
+        buf.flip();
+
+        HandlerState state = new HandlerState();
+
+        RequestStartHandler handler = new RequestStartHandler();
+        assertFalse(handler.handleState(null, buf, state));
+
+        buf.put(Helper.makeByteBuffer("\n"));
+        buf.flip();
+
+        assertTrue(handler.handleState(null, buf, state));
+
+        assertEquals(0, state.getRequestBuilder().getMinorVersion());
     }
 
     @Test(expected=InvalidRequestException.class)
