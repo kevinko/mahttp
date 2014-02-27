@@ -209,7 +209,7 @@ class Strings {
     }
 
     /**
-     * @return the http version (0 for 1.0 or 1 for 1.1).
+     * @return the http minor version (0 for 1.0 or 1 for 1.1).
      * @throws ParseException on error.
      */
     public static int parseHttpVersion(ByteBuffer buf) throws ParseException {
