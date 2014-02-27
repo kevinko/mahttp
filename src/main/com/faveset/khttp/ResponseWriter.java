@@ -44,6 +44,12 @@ class ResponseWriter implements HttpResponseWriter {
 
     private int mHttpMinorVersion;
 
+    // HTTP status code for the response.
+    private int mStatus;
+
+    // Tracks the number of bytes sent for the result.
+    private long mSentCount;
+
     public ResponseWriter() {
         mHeadersBuilder = new HeadersBuilder();
         // Use direct allocations.
@@ -55,6 +61,7 @@ class ResponseWriter implements HttpResponseWriter {
         };
 
         mHttpMinorVersion = sHttpMinorVersionDefault;
+        mStatus = HttpStatus.OK;
     }
 
     /**
@@ -71,6 +78,20 @@ class ResponseWriter implements HttpResponseWriter {
     }
 
     /**
+     * @return the number of bytes sent for the response.
+     */
+    public long getSentCount() {
+        return mSentCount;
+    }
+
+    /**
+     * @return the HTTP status code for the response.
+     */
+    public int getStatus() {
+        return mStatus;
+    }
+
+    /**
      * Finalizes the response and sends it over the connection.  This manages
      * NonBlockingConnection callbacks until completion and then calls
      * callback when sending is done.
@@ -82,6 +103,8 @@ class ResponseWriter implements HttpResponseWriter {
         mSendCallback = callback;
 
         long remCount = mBufPool.remaining();
+        mSentCount = remCount;
+
         ByteBuffer[] bufs = mBufPool.build();
         conn.send(mNbcSendCallback, bufs, remCount);
     }
@@ -91,6 +114,7 @@ class ResponseWriter implements HttpResponseWriter {
      * minorVersion.  Major version will always be 1.
      *
      * @return this for chaining.
+     */
     public ResponseWriter setHttpMinorVersion(int minorVersion) {
         mHttpMinorVersion = minorVersion;
         return this;
@@ -123,6 +147,8 @@ class ResponseWriter implements HttpResponseWriter {
         if (mWroteHeaders) {
             return;
         }
+
+        mStatus = statusCode;
 
         String reason = sReasonMap.get(statusCode);
         if (reason == null) {
