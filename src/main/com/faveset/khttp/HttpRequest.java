@@ -60,6 +60,9 @@ public class HttpRequest {
 
     protected void clear() {
         mBodyType = BodyType.IGNORE;
+        mMethod = Method.GET;
+        mUri = "";
+        mMinorVersion = sDefaultMinorVersion;
     }
 
     BodyType getBodyType() {
@@ -72,6 +75,13 @@ public class HttpRequest {
 
     public Method getMethod() {
         return mMethod;
+    }
+
+    /**
+     * @return the minor version of the HTTP request.
+     */
+    public int getMinorVersion() {
+        return mMinorVersion;
     }
 
     OnBodyCopyCallback getOnBodyCopyCallback() {

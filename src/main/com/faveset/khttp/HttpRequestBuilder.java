@@ -20,8 +20,6 @@ class HttpRequestBuilder extends HttpRequest {
         super.clear();
 
         mHeadersBuilder.clear();
-        mMethod = Method.GET;
-        mUri = "";
     }
 
     public HeadersBuilder getHeadersBuilder() {
@@ -39,7 +37,7 @@ class HttpRequestBuilder extends HttpRequest {
     /**
      * Set the minor version of the HTTP protocol used in the request.
      */
-    public void setVersion(int minor) {
+    public void setMinorVersion(int minor) {
         mMinorVersion = minor;
     }
 }
