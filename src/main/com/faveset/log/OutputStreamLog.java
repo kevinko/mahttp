@@ -18,6 +18,13 @@ public class OutputStreamLog implements Log {
         mWriter = new PrintWriter(os);
     }
 
+    /**
+     * Closes the stream and releases all resources.
+     */
+    public void close() {
+        mWriter.close();
+    }
+
     public synchronized int d(String tag, String msg) {
         String s = makeString(sDebugLabel, tag, msg);
         mWriter.append(s);
