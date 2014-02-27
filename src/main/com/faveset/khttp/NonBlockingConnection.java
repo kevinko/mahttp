@@ -455,4 +455,11 @@ class NonBlockingConnection {
         mOnErrorCallback = callback;
         return this;
     }
+
+    /**
+     * @return the underlying SocketChannel
+     */
+    public SocketChannel socketChannel() {
+        return mChan;
+    }
 }
