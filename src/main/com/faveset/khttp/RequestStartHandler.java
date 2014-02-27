@@ -52,6 +52,8 @@ class RequestStartHandler implements StateHandler {
                 // We only support HTTP/1.0 and HTTP/1.1.
                 throw new InvalidRequestException("Unsupported HTTP version in request", HttpStatus.NOT_IMPLEMENTED);
             }
+
+            req.setVersion(version);
         } catch (ParseException e) {
                 throw new InvalidRequestException("Could not parse HTTP version", HttpStatus.BAD_REQUEST);
         }
