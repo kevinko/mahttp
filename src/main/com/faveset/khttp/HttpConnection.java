@@ -8,6 +8,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -16,10 +18,6 @@ import com.faveset.log.NullLog;
 
 // Handles an HTTP request in non-blocking fashion.
 class HttpConnection {
-    private static final String sTag = HttpConnection.class.toString();
-
-    private Log mLog = new NullLog();
-
     /**
      * Called when the HttpConnection is closed.  The caller should call
      * close() to clean up.
@@ -67,10 +65,24 @@ class HttpConnection {
         }
     }
 
+    private static final String sTag = HttpConnection.class.toString();
+
     /* Size for the internal buffers. */
     public static final int BUFFER_SIZE = 4096;
 
     private static final EnumMap<State, StateEntry> mStateHandlerMap;
+
+    private Log mLog = new NullLog();
+
+    // Formats Date strings in common log format.
+    private ThreadLocal<SimpleDateFormat> mLogDateFormatter =
+        new ThreadLocal<SimpleDateFormat>() {
+            @Override
+            protected SimpleDateFormat initialValue() {
+                // See getLogTime() for time format.
+                return new SimpleDateFormat("dd/MMM/yyyy:HH:mm:ss Z");
+            }
+        };
 
     private Map<String, HttpHandler> mHttpHandlerMap;
 
@@ -134,6 +146,23 @@ class HttpConnection {
      */
     public void close() throws IOException {
         mConn.close();
+    }
+
+    /**
+     * @return the current time in common log format
+     *
+     * [day/month/year:hour:minute:second zone]
+     * day = 2*digit
+     * month = 3*letter
+     * year = 4*digit
+     * hour = 2*digit
+     * minute = 2*digit
+     * second = 2*digit
+     * zone = (`+' | `-') 4*digit
+     */
+    private String getLogTime() {
+        Date now = new Date();
+        return mLogDateFormatter.get().format(now);
     }
 
     /**
@@ -204,6 +233,12 @@ class HttpConnection {
      * reconfigures the HttpConnection to listen for another request.
      */
     private void handleSendResponse() {
+        // We're done sending the response; log the result.
+        String remoteAddrStr = mConn.socketChannel().socket().getInetAddress().toString();
+        ResponseWriter w = mHandlerState.getResponseWriter();
+        logRequest(mHandlerState.getRequestBuilder(), remoteAddrStr,
+                w.getStatus(), w.getSentCount());
+
         mState = State.REQUEST_START;
 
         // Restart the receive, now that we're at the start state.
@@ -219,6 +254,8 @@ class HttpConnection {
     private boolean handleStateStep(NonBlockingConnection conn, ByteBuffer buf) {
         StateEntry entry = mStateHandlerMap.get(mState);
         if (entry == null) {
+            mLog.e(sTag, "invalid HTTP state: " + mState);
+
             sendErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR);
             // Unknown state.  Stop state steps until we send the response.
             return true;
@@ -252,11 +289,26 @@ class HttpConnection {
     }
 
     /**
-     * Resets the connection state for a new request.
+     * Logs the request using the response code httpStatus.
+     *
+     * @param req may be null if undetermined (due to error)
+     * @param httpStatus
+     * @param remoteAddrStr remote address
+     * @param responseLen number of bytes for the response.
      */
-    private void reset() {
-        mState = State.REQUEST_START;
-        mHandlerState.clear();
+    private void logRequest(HttpRequest req,
+            String remoteAddrStr, int httpStatus, long responseLen) {
+        String reqStr;
+        if (req != null) {
+            reqStr = req.toString();
+        } else {
+            reqStr = "";
+        }
+
+        String s = String.format("%s - - [%s] \"%s\" %d %d",
+                remoteAddrStr, getLogTime(), reqStr, httpStatus, responseLen);
+
+        mLog.i(sTag, s);
     }
 
     /**
