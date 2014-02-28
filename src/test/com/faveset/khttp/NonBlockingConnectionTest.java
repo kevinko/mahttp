@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -28,55 +27,19 @@ public class NonBlockingConnectionTest {
     private static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
     private static final int sListenPort = 4889;
 
-    private static class ServerThread extends Thread {
-        public interface Task {
-            void run(Socket sock);
-        }
-
-        private Object mSignal;
-        private Task mTask;
-
-        public ServerThread(Object signal, Task task) {
-            mSignal = signal;
-            mTask = task;
-        }
-
-        public void run() {
-            try {
-                ServerSocket listenSock = new ServerSocket();
-                listenSock.setReuseAddress(true);
-                SocketAddress sa = new InetSocketAddress("127.0.0.1", sListenPort);
-                listenSock.bind(sa);
-
-                synchronized (mSignal) {
-                    mSignal.notify();
-                }
-
-                Socket sock = listenSock.accept();
-
-                mTask.run(sock);
-
-                sock.close();
-                listenSock.close();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
     private SocketChannel connect(int port) throws IOException {
         SocketAddress sa = new InetSocketAddress("127.0.0.1", port);
         return SocketChannel.open(sa);
     }
 
     private abstract class Tester {
-        private ServerThread.Task mServerTask;
+        private Helper.ServerThread.Task mServerTask;
         private int mBufferSize;
 
         /**
          * @param bufferSize will be passed to the NonBlockingConnection.
          */
-        public Tester(ServerThread.Task serverTask, int bufferSize) {
+        public Tester(Helper.ServerThread.Task serverTask, int bufferSize) {
             mServerTask = serverTask;
             mBufferSize = bufferSize;
         }
@@ -87,7 +50,7 @@ public class NonBlockingConnectionTest {
 
         public void run() throws IOException, InterruptedException {
             Object signal = new Object();
-            ServerThread server = new ServerThread(signal, mServerTask);
+            Helper.ServerThread server = new Helper.ServerThread(sListenPort, signal, mServerTask);
             server.start();
 
             synchronized (signal) {
@@ -208,8 +171,8 @@ public class NonBlockingConnectionTest {
         tester.run();
     }
 
-    private ServerThread.Task makeRecvTask(final String expectedStr) {
-        return new ServerThread.Task() {
+    private Helper.ServerThread.Task makeRecvTask(final String expectedStr) {
+        return new Helper.ServerThread.Task() {
             public void run(Socket sock) {
                 try {
                     InputStream is = sock.getInputStream();
@@ -237,8 +200,8 @@ public class NonBlockingConnectionTest {
     /**
      * Closes the connection after closeBytes is received.
      */
-    private ServerThread.Task makeRecvCloseTask(final String expectedStr, final int closeBytes) {
-        return new ServerThread.Task() {
+    private Helper.ServerThread.Task makeRecvCloseTask(final String expectedStr, final int closeBytes) {
+        return new Helper.ServerThread.Task() {
             public void run(Socket sock) {
                 int recvLen = closeBytes;
                 if (recvLen > expectedStr.length()) {
@@ -321,8 +284,8 @@ public class NonBlockingConnectionTest {
         tester.run();
     }
 
-    private ServerThread.Task makeSendTask(final String testStr) {
-        return new ServerThread.Task() {
+    private Helper.ServerThread.Task makeSendTask(final String testStr) {
+        return new Helper.ServerThread.Task() {
             public void run(Socket sock) {
                 try {
                     OutputStream os = sock.getOutputStream();
