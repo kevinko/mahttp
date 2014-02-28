@@ -428,6 +428,8 @@ public class NonBlockingConnectionTest {
         tester.run();
     }
 
+    // Test a close by the sender, which occurs after the Task's run method
+    // completes.
     @Test
     public void testRecvClose() throws IOException, InterruptedException {
         final String expectedString = makeTestString(65535);
@@ -457,8 +459,9 @@ public class NonBlockingConnectionTest {
                     }
                 });
 
-                conn.recv(new NonBlockingConnection.OnRecvCallback() {
+                conn.recvPersistent(new NonBlockingConnection.OnRecvCallback() {
                     public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                        // Just eat up the data.
                     }
                 });
             }
