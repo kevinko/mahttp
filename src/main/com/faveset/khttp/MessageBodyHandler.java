@@ -29,7 +29,6 @@ class MessageBodyHandler implements StateHandler {
         // TODO: handle conditionals
         // TODO: handle partials
 
-        // TODO: where do you assign the OnRequestCallback to state?
         HandlerState.OnRequestCallback handler = state.getOnRequestCallback();
 
         ByteBuffer getBuf = buf.duplicate();
