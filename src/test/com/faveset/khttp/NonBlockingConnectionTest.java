@@ -577,7 +577,7 @@ public class NonBlockingConnectionTest {
             protected void prepareConn(NonBlockingConnection conn) {
                 // This will hang if the implementation is correct, so set
                 // a delay.
-                delayedStop(1500);
+                delayedStop(1000);
 
                 conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
                     public void onClose(NonBlockingConnection conn) {
