@@ -46,6 +46,9 @@ public class NonBlockingConnectionTest {
 
         protected void finish() {}
 
+        protected void onStop(NonBlockingConnection conn) {
+        }
+
         public void run() throws IOException, InterruptedException {
             Object signal = new Object();
             Helper.ServerThread server = new Helper.ServerThread(sListenPort, signal, mServerTask);
@@ -70,6 +73,7 @@ public class NonBlockingConnectionTest {
                     break;
                 }
                 if (mStopTime != 0 && mStopTime < System.currentTimeMillis()) {
+                    onStop(conn);
                     break;
                 }
 
@@ -199,6 +203,29 @@ public class NonBlockingConnectionTest {
 
                     // Read one more byte, which should be connection close.
                     assertEquals(-1, is.read(data));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        };
+    }
+
+    /**
+     * This just receives until close.
+     */
+    private Helper.ServerThread.Task makeRecvSinkTask() {
+        return new Helper.ServerThread.Task() {
+            public void run(Socket sock) {
+                try {
+                    InputStream is = sock.getInputStream();
+                    while (true) {
+                        int ch = is.read();
+                        if (ch == -1) {
+                            break;
+                        }
+                    }
+
+                    sock.close();
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
@@ -597,6 +624,74 @@ public class NonBlockingConnectionTest {
                 conn.recv(new NonBlockingConnection.OnRecvCallback() {
                     public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
                         mRecvCount++;
+                    }
+                });
+            }
+        };
+
+        tester.run();
+    }
+
+    @Test
+    public void testSendSelectorSets() throws IOException, InterruptedException {
+        final String expectedString = makeTestString(65535);
+        final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
+
+        Tester tester = new Tester(makeRecvSinkTask(), 65536) {
+            private int mCloseCount = 0;
+            private int mSendCount = 0;
+
+            @Override
+            protected void finish() {
+                super.finish();
+
+                assertEquals(0, mCloseCount);
+                assertEquals(1, mSendCount);
+            }
+
+            @Override
+            protected void onStop(NonBlockingConnection conn) {
+                super.onStop(conn);
+                try {
+                    conn.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                // This will hang if the implementation is correct, so set
+                // a delay.
+                delayedStop(1000);
+
+                conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
+                    public void onClose(NonBlockingConnection conn) {
+                        mCloseCount++;
+
+                        try {
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+
+                int origLimit = buf.limit();
+                buf.limit(1024);
+                ByteBuffer outBuf = conn.getOutBuffer();
+                outBuf.put(buf);
+                outBuf.flip();
+                buf.limit(origLimit);
+
+                conn.send(new NonBlockingConnection.OnSendCallback() {
+                    public void onSend(NonBlockingConnection conn) {
+                        mSendCount++;
+
+                        // Write just a portion of the expected string.  Since
+                        // this is non-persistent, things will hang until
+                        // the delayedStop kicks in.  If the selector handling
+                        // is wrong, this will keep sending.
                     }
                 });
             }
