@@ -71,6 +71,9 @@ class ResponseWriter implements HttpResponseWriter {
         mHeadersBuilder.clear();
         mBufPool.clear();
         mWroteHeaders = false;
+        mHttpMinorVersion = sHttpMinorVersionDefault;
+        mStatus = HttpStatus.OK;
+        mSentCount = 0;
     }
 
     public HeadersBuilder getHeadersBuilder() {
