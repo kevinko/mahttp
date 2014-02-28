@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 class RequestStartHandler implements StateHandler {
     /**
      * @param conn is not used currently.
-     * @param state will be reset for the header parsing stage on success.
+     * @param state will be cleared for the header parsing stage on success.
      *
      * @throws InvalidRequestException on bad request.
      * @return true if enough data existed in the buffer to parse a request
