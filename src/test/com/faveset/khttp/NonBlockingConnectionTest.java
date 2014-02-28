@@ -268,6 +268,59 @@ public class NonBlockingConnectionTest {
         };
     }
 
+    @Test
+    public void testRecvPersistent() throws IOException, InterruptedException {
+        // Pick something that exceeds the NonBlockingConnection buffer.
+        final String expectedStr = makeTestString(4096);
+
+        Tester tester = new Tester(makeSendTask(expectedStr), 16) {
+            private int mRecvCount = 0;
+            private ByteBuffer mCmpBuf = ByteBuffer.allocate(2 * expectedStr.length());
+
+            private NonBlockingConnection.OnRecvCallback makeRecvCallback() {
+                return new NonBlockingConnection.OnRecvCallback() {
+                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                        handleRecv(conn, buf);
+                    }
+                };
+            }
+
+            @Override
+            protected void finish() {
+                super.finish();
+
+                assertTrue(mRecvCount > 1);
+            }
+
+            private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                mRecvCount++;
+
+                try {
+                    mCmpBuf.put(buf);
+
+                    if (mCmpBuf.position() < expectedStr.length()) {
+                        // Continue feeding (persistent).
+                        return;
+                    }
+
+                    mCmpBuf.flip();
+                    Helper.compare(mCmpBuf, expectedStr);
+
+                    conn.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.recvPersistent(makeRecvCallback());
+            }
+        };
+
+        tester.run();
+    }
+
     private ServerThread.Task makeSendTask(final String testStr) {
         return new ServerThread.Task() {
             public void run(Socket sock) {

@@ -202,6 +202,9 @@ class NonBlockingConnection {
         if (callback != null) {
             callback.onRecv(this, mInBuffer);
         }
+
+        // Ready for further reads if this is persistent.
+        mInBuffer.clear();
     }
 
     /**
