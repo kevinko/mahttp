@@ -277,16 +277,29 @@ class NonBlockingConnection {
      * This should be called when the Selector selects the key managed by the
      * connection.  We enforce this by associating a SelectorHandler with each
      * key.
+     *
+     * The key need not be removed from the ready set during each iteration
+     * of the Selector's select loop.
      */
     private void onSelect() {
         try {
             SelectionKey key = mKey;
 
-            if (key.isValid() && key.isReadable()) {
+            // We need to check the interest ops, because Selectors will
+            // preserve their existing ready bits if the key is already in
+            // the ready set.  By checking here, we eliminate the need
+            // for one to remove the key from the set at every
+            // select iteration, which is more expensive than a bitwise op.
+            int ops = key.interestOps();
+            if (key.isValid() &&
+                    (ops & SelectionKey.OP_READ) != 0 &&
+                    key.isReadable()) {
                 handleRead();
             }
 
-            if (key.isValid() && key.isWritable()) {
+            if (key.isValid() &&
+                    (ops & SelectionKey.OP_WRITE) != 0 &&
+                    key.isWritable()) {
                 handleWrite();
             }
         } catch (IOException e) {
