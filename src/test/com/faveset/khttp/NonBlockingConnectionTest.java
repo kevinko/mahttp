@@ -28,6 +28,9 @@ public class NonBlockingConnectionTest {
     private static final int sListenPort = 4889;
 
     private abstract class Tester {
+        // Time to force a stop during testing.  0 to disable.
+        private long mStopTime;
+
         private Helper.ServerThread.Task mServerTask;
         private int mBufferSize;
 
@@ -83,6 +86,14 @@ public class NonBlockingConnectionTest {
             server.join();
 
             finish();
+        }
+
+        /**
+         * Stop the test after millis milliseconds from now.
+         */
+        public void delayedStop(int millis) {
+            long now = System.currentTimeMillis();
+            mStopTime = now + millis;
         }
     }
 
@@ -527,6 +538,65 @@ public class NonBlockingConnectionTest {
                 conn.send(new NonBlockingConnection.OnSendCallback() {
                     public void onSend(NonBlockingConnection conn) {
                         assertTrue(false);
+                    }
+                });
+            }
+        };
+
+        tester.run();
+    }
+
+    // Make sure that a selector's prior ready state doesn't leak over to
+    // the new ready set when manipulating interest states.  This catches the
+    // following situation described in Selector docs:
+    //
+    //     Otherwise the channel's key is already in the selected-key set, so
+    //     its ready-operation set is modified to identify any new operations
+    //     for which the channel is reported to be ready. Any readiness
+    //     information previously recorded in the ready set is preserved; in
+    //     other words, the ready set returned by the underlying system is
+    //     bitwise-disjoined into the key's current ready set.
+    @Test
+    public void testRecvSelectorSets() throws IOException, InterruptedException {
+        final String expectedString = makeTestString(65535);
+        final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
+
+        Tester tester = new Tester(makeSendTask(expectedString), 65536) {
+            private int mCloseCount = 0;
+            private int mRecvCount = 0;
+
+            @Override
+            protected void finish() {
+                super.finish();
+
+                assertEquals(0, mCloseCount);
+                assertEquals(1, mRecvCount);
+            }
+
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                // This will hang if the implementation is correct, so set
+                // a delay.
+                delayedStop(1500);
+
+                conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
+                    public void onClose(NonBlockingConnection conn) {
+                        mCloseCount++;
+
+                        try {
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+
+                // This is intentionally not a persistent receive.  The
+                // receive will be cancelled as a result and should not
+                // be called again.
+                conn.recv(new NonBlockingConnection.OnRecvCallback() {
+                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                        mRecvCount++;
                     }
                 });
             }
