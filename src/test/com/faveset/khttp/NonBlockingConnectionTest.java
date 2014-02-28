@@ -66,8 +66,11 @@ public class NonBlockingConnectionTest {
                 if (selector.keys().size() == 0) {
                     break;
                 }
+                if (mStopTime != 0 && mStopTime < System.currentTimeMillis()) {
+                    break;
+                }
 
-                Set<SelectionKey> readyKeys = selector.keys();
+                Set<SelectionKey> readyKeys = selector.selectedKeys();
 
                 for (SelectionKey key : readyKeys) {
                     SelectorHandler handler = (SelectorHandler) key.attachment();
