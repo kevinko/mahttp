@@ -10,6 +10,7 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.channels.SocketChannel;
 
 import static org.junit.Assert.assertEquals;
 
@@ -57,6 +58,11 @@ class Helper {
     public static void compare(ByteBuffer buf, String v) {
         String dataStr = new String(buf.array(), buf.position(), buf.remaining(), US_ASCII_CHARSET);
         assertEquals(v, dataStr);
+    }
+
+    public static SocketChannel connect(int port) throws IOException {
+        SocketAddress sa = new InetSocketAddress("127.0.0.1", port);
+        return SocketChannel.open(sa);
     }
 
     public static ByteBuffer makeByteBuffer(String s) {

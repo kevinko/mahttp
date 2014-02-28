@@ -27,11 +27,6 @@ public class NonBlockingConnectionTest {
     private static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
     private static final int sListenPort = 4889;
 
-    private SocketChannel connect(int port) throws IOException {
-        SocketAddress sa = new InetSocketAddress("127.0.0.1", port);
-        return SocketChannel.open(sa);
-    }
-
     private abstract class Tester {
         private Helper.ServerThread.Task mServerTask;
         private int mBufferSize;
@@ -58,7 +53,7 @@ public class NonBlockingConnectionTest {
             }
 
             final Selector selector = Selector.open();
-            SocketChannel chan = connect(sListenPort);
+            SocketChannel chan = Helper.connect(sListenPort);
             NonBlockingConnection conn = new NonBlockingConnection(selector, chan, mBufferSize);
 
             prepareConn(conn);
