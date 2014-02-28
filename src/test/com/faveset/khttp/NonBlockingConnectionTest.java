@@ -171,7 +171,16 @@ public class NonBlockingConnectionTest {
                 };
             }
 
+            @Override
+            protected void finish() {
+                super.finish();
+
+                assertTrue(mRecvCount > 1);
+            }
+
             private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                mRecvCount++;
+
                 try {
                     mCmpBuf.put(buf);
 
