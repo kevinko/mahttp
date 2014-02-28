@@ -173,16 +173,16 @@ class HttpConnection {
     }
 
     private boolean handleRequest(HttpRequest req, ByteBuffer data, ResponseWriter w) {
+        // Prepare the writer.
+        w.setHttpMinorVersion(req.getMinorVersion());
+
         String uri = req.getUri();
         HttpHandler handler = mHttpHandlerMap.get(uri);
         if (handler == null) {
             sendErrorResponse(HttpStatus.NOT_FOUND);
-            // Transition to a new state.
+            // Transition to a new state to handle the send.
             return true;
         }
-
-        // Prepare the writer.
-        w.clear();
 
         handler.onRequest(req, w);
 
@@ -266,7 +266,6 @@ class HttpConnection {
      */
     private void sendErrorResponse(int errorCode) {
         ResponseWriter writer = mHandlerState.getResponseWriter();
-        writer.clear();
         writer.writeHeader(errorCode);
 
         sendResponse(mConn, writer);
