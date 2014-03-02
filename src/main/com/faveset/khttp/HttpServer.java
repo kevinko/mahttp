@@ -19,7 +19,7 @@ import java.nio.channels.SocketChannel;
 import com.faveset.log.Log;
 import com.faveset.log.NullLog;
 
-class HttpServer {
+public class HttpServer {
     private static final String sTag = HttpServer.class.toString();
 
     private Log mLog = new NullLog();
