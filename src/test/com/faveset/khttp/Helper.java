@@ -3,6 +3,7 @@
 package com.faveset.khttp;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.ServerSocket;
@@ -67,5 +68,21 @@ class Helper {
 
     public static ByteBuffer makeByteBuffer(String s) {
         return ByteBuffer.wrap(s.getBytes(US_ASCII_CHARSET));
+    }
+
+    /**
+     * Reads until a '\n', and returns the line as a string, with '\n'
+     * included.
+     */
+    public static String readLine(InputStream input) throws IOException {
+        StringBuilder builder = new StringBuilder();
+        while (true) {
+            char ch = (char) input.read();
+            builder.append(ch);
+
+            if (ch == '\n') {
+                return builder.toString();
+            }
+        }
     }
 }
