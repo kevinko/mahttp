@@ -47,6 +47,8 @@ public class HttpServer {
         }
     };
 
+    private volatile boolean mIsDone;
+
     public HttpServer() {}
 
     public void close() throws IOException {
@@ -132,10 +134,18 @@ public class HttpServer {
         mSelector = Selector.open();
         SelectionKey listenKey = mListenChan.register(mSelector, SelectionKey.OP_ACCEPT, mListenSelectorHandler);
 
+        mIsDone = false;
+
         while (true) {
-            int readyCount = mSelector.select();
-            if (readyCount == 0) {
-                // We were interrupted, or the selector was cancelled.
+            // The return value of select() (number of keys whose
+            // ready-operation sets were updated) is not the best indicator
+            // to check for completeness, since a key will not be counted
+            // if its ready set does not change.  (It might have been read
+            // ready before the select() and read ready after, which would
+            // not be counted.)
+            mSelector.select();
+
+            if (mIsDone) {
                 break;
             }
 
@@ -165,6 +175,7 @@ public class HttpServer {
      * Threadsafe method for stopping the HttpServer.
      */
     public synchronized void stop() {
+        mIsDone = true;
         mSelector.wakeup();
     }
 
