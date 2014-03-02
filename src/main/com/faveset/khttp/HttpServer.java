@@ -157,6 +157,10 @@ class HttpServer {
         mHttpHandlerMap.put(url, handler);
     }
 
+    public void setLog(Log log) {
+        mLog = log;
+    }
+
     /**
      * Threadsafe method for stopping the HttpServer.
      */
