@@ -39,7 +39,8 @@ public class HeadersTest extends Headers {
         builder.add("hello", "how");
         builder.add("hello", "are");
         builder.add("hello", "you");
-        builder.write(buf);
+        int len = builder.write(buf);
+        assertEquals(26, len);
 
         buf.flip();
 
@@ -64,7 +65,8 @@ public class HeadersTest extends Headers {
         builder.add("hello", "how");
         builder.add("hello", "are");
         builder.add("hello", "you");
-        builder.write(pool);
+        int len = builder.write(pool);
+        assertEquals(26, len);
 
         ByteBuffer[] bufs = pool.build();
         assertEquals(7, bufs.length);
@@ -75,5 +77,20 @@ public class HeadersTest extends Headers {
         Helper.compare(bufs[4], ",are");
         Helper.compare(bufs[5], ",you");
         Helper.compare(bufs[6], "\r\n");
+    }
+
+    @Test
+    public void testWriteStringBuilder() throws BufferOverflowException {
+        StringBuilder sb = new StringBuilder();
+
+        HeadersBuilder builder = new HeadersBuilder();
+        builder.add("hello", "world");
+        builder.add("hello", "how");
+        builder.add("hello", "are");
+        builder.add("hello", "you");
+        int len = builder.write(sb);
+        assertEquals(26, len);
+
+        assertEquals("Hello: world,how,are,you\r\n", sb.toString());
     }
 }

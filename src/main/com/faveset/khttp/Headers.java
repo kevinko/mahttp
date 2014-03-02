@@ -84,8 +84,11 @@ public class Headers {
 
     /**
      * Writes the headers in (HTTP) wire format to buf.
+     *
+     * @return the number of bytes written.
      */
-    public void write(ByteBuffer buf) throws BufferOverflowException {
+    public int write(ByteBuffer buf) throws BufferOverflowException {
+        int start = buf.position();
         for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
             Strings.write(entry.getKey(), buf);
             buf.put(sHeaderDelimBytes);
@@ -93,24 +96,34 @@ public class Headers {
 
             buf.put(Strings.CRLF_BYTES);
         }
+        int count = buf.position() - start;
+        return count;
     }
 
     /**
      * Writes the headers in (HTTP) wire format to bufPool.
+     *
+     * @return the number of bytes written.
      */
-    public void write(ByteBufferPool bufPool) {
+    public int write(ByteBufferPool bufPool) {
+        long start = bufPool.remaining();
         for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
             bufPool.writeString(entry.getKey());
             bufPool.writeString(sHeaderDelim);
             writeValuePool(bufPool, entry.getValue());
             bufPool.writeString(Strings.CRLF);
         }
+        long count = bufPool.remaining() - start;
+        return (int) count;
     }
 
     /**
      * Write the headers in (HTTP) wire format to the StringBuilder.
+     *
+     * @return the number of bytes written.
      */
-    public void write(StringBuilder builder) {
+    public int write(StringBuilder builder) {
+        int start = builder.length();
         for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
             builder.append(entry.getKey());
             builder.append(": ");
@@ -119,6 +132,8 @@ public class Headers {
 
             builder.append("\r\n");
         }
+        int count = builder.length() - start;
+        return count;
     }
 
     /**
