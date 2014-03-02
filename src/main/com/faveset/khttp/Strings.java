@@ -5,6 +5,7 @@ package com.faveset.khttp;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.channels.SelectionKey;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -145,6 +146,41 @@ class Strings {
             default:
                 return false;
         }
+    }
+
+    /**
+     * Helper function for debugging SelectionKey interest sets.
+     */
+    public static String keyInterestOpsToString(int ops) {
+        StringBuilder b = new StringBuilder();
+
+        b.append(ops);
+        b.append(' ');
+
+        if ((ops & SelectionKey.OP_ACCEPT) != 0) {
+            b.append("a");
+        } else {
+            b.append(" ");
+        }
+
+        if ((ops & SelectionKey.OP_CONNECT) != 0) {
+            b.append("c");
+        } else {
+            b.append(" ");
+        }
+
+        if ((ops & SelectionKey.OP_READ) != 0) {
+            b.append("r");
+        } else {
+            b.append(" ");
+        }
+
+        if ((ops & SelectionKey.OP_WRITE) != 0) {
+            b.append("w");
+        } else {
+            b.append(" ");
+        }
+        return b.toString();
     }
 
     public static String join(List<String> elems, String conjunction) {
