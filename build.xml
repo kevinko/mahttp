@@ -45,6 +45,7 @@
 		<mkdir dir="${report.dir}" />
 
 		<junit haltonfailure="true" printsummary="true" showoutput="yes">
+			<!-- <jvmarg line="-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=9009" /> -->
 			<classpath>
 				<pathelement location="${jarfile}" />
 				<pathelement location="${test-classes.dir}" />
