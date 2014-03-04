@@ -36,6 +36,37 @@ public class ByteBufferPoolTest {
         Helper.compare(bufs[2], "foo");
         Helper.compare(bufs[3], "worl");
         Helper.compare(bufs[4], "d");
+
+        // Now, test insertion.  pool should be cleared after the build.
+        pool.writeString("i am hungry!");
+        assertEquals(12, pool.remaining());
+
+        ByteBufferPool.Inserter inserter = pool.insertFront();
+        buf = Helper.makeByteBuffer("foo");
+        inserter.writeBuffer(buf);
+
+        assertEquals(15, pool.remaining());
+
+        bufs = pool.build();
+        assertEquals(4, bufs.length);
+
+        Helper.compare(bufs[0], "foo");
+        Helper.compare(bufs[1], "i am");
+        Helper.compare(bufs[2], " hun");
+        Helper.compare(bufs[3], "gry!");
+
+        // Test insertions on an empty pool.
+        assertEquals(0, pool.remaining());
+
+        inserter = pool.insertFront();
+        buf = Helper.makeByteBuffer("pizza");
+        inserter.writeBuffer(buf);
+
+        assertEquals(5, pool.remaining());
+        bufs = pool.build();
+        // The inserted buffer is always inserted as a single unit.
+        assertEquals(1, bufs.length);
+        Helper.compare(bufs[0], "pizza");
     }
 
     @Test
@@ -57,5 +88,41 @@ public class ByteBufferPoolTest {
         Helper.compare(bufs[1], "owor");
         Helper.compare(bufs[2], "ldfo");
         Helper.compare(bufs[3], "oob");
+
+        // Test insertions.
+        assertEquals(0, pool.remaining());
+        pool.writeString("the ");
+        assertEquals(4, pool.remaining());
+        pool.writeString("world.");
+        assertEquals(10, pool.remaining());
+
+        ByteBufferPool.Inserter inserter = pool.insertFront();
+        inserter.writeString("Save save SAVE!");
+        assertEquals(25, pool.remaining());
+
+        bufs = pool.build();
+        assertEquals(7, bufs.length);
+
+        Helper.compare(bufs[0], "Save");
+        Helper.compare(bufs[1], " sav");
+        Helper.compare(bufs[2], "e SA");
+        Helper.compare(bufs[3], "VE!");
+        Helper.compare(bufs[4], "the ");
+        Helper.compare(bufs[5], "worl");
+        Helper.compare(bufs[6], "d.");
+
+        // Test inserting to an empty pool.
+        assertEquals(0, pool.remaining());
+        inserter = pool.insertFront();
+        // This is also a multiple of the buffer size 4 to test handling
+        // of full buffers.
+        inserter.writeString("Save me please!!");
+
+        bufs = pool.build();
+        assertEquals(4, bufs.length);
+        Helper.compare(bufs[0], "Save");
+        Helper.compare(bufs[1], " me ");
+        Helper.compare(bufs[2], "plea");
+        Helper.compare(bufs[3], "se!!");
     }
 }
