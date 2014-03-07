@@ -15,7 +15,7 @@ class Strings {
     public static final String CRLF = "\r\n";
     public static final byte[] CRLF_BYTES = { (byte) '\r', (byte) '\n' };
 
-    private static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
+    static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
 
     /**
      * Returns a String created from buf at buf's current position using its
