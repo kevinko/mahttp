@@ -167,6 +167,32 @@ class ByteBufferPool {
     }
 
     /**
+     * The caller must close() the Inserter when done before calling any other
+     * write method, even if the Inserter is not used (e.g., with try-finally).
+     * This allows the inserter to continue from a prior remainder without
+     * wasting buffer space.
+     *
+     * @return an Inserter for inserting data at the back of the list.
+     */
+    public Inserter insertBack() {
+        Inserter inserter = new Inserter(mBufs.listIterator(mBufs.size()), mCurrBuf);
+        mCurrBuf = null;
+        return inserter;
+    }
+
+    /**
+     * The Inserter is invalidated once the ByteBufferPool is modified
+     * by the pool's writeBuffer(), writeString() methods.
+     *
+     * The caller should take care to close() the Inserter when done.
+     *
+     * @return an Inserter for inserting data at the front of the list.
+     */
+    public Inserter insertFront() {
+        return new Inserter(mBufs.listIterator());
+    }
+
+    /**
      * @param insertIter the insertion point.  Buffers will be added to
      * the iterator.
      * @param currBuf the ByteBuffer with which to continue appending data to.
@@ -233,32 +259,6 @@ class ByteBufferPool {
         } while (sLen > 0);
 
         return currBuf;
-    }
-
-    /**
-     * The caller must close() the Inserter when done before calling any other
-     * write method, even if the Inserter is not used (e.g., with try-finally).
-     * This allows the inserter to continue from a prior remainder without
-     * wasting buffer space.
-     *
-     * @return an Inserter for inserting data at the back of the list.
-     */
-    public Inserter insertBack() {
-        Inserter inserter = new Inserter(mBufs.listIterator(mBufs.size()), mCurrBuf);
-        mCurrBuf = null;
-        return inserter;
-    }
-
-    /**
-     * The Inserter is invalidated once the ByteBufferPool is modified
-     * by the pool's writeBuffer(), writeString() methods.
-     *
-     * The caller should take care to close() the Inserter when done.
-     *
-     * @return an Inserter for inserting data at the front of the list.
-     */
-    public Inserter insertFront() {
-        return new Inserter(mBufs.listIterator());
     }
 
     /**
