@@ -27,6 +27,11 @@ class ByteBufferPool {
             mIter = iter;
         }
 
+        private Inserter(ListIterator<ByteBuffer> iter, ByteBuffer remainingBuf) {
+            mIter = iter;
+            mRemainingBuf = remainingBuf;
+        }
+
         /**
          * This must be called when done writing to the Inserter to finalize
          * insertion operations.
@@ -231,8 +236,24 @@ class ByteBufferPool {
     }
 
     /**
+     * The caller must close() the Inserter when done before calling any other
+     * write method, even if the Inserter is not used (e.g., with try-finally).
+     * This allows the inserter to continue from a prior remainder without
+     * wasting buffer space.
+     *
+     * @return an Inserter for inserting data at the back of the list.
+     */
+    public Inserter insertBack() {
+        Inserter inserter = new Inserter(mBufs.listIterator(mBufs.size()), mCurrBuf);
+        mCurrBuf = null;
+        return inserter;
+    }
+
+    /**
      * The Inserter is invalidated once the ByteBufferPool is modified
      * by the pool's writeBuffer(), writeString() methods.
+     *
+     * The caller should take care to close() the Inserter when done.
      *
      * @return an Inserter for inserting data at the front of the list.
      */

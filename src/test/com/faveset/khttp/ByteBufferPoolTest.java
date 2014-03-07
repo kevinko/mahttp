@@ -69,6 +69,21 @@ public class ByteBufferPoolTest {
         // The inserted buffer is always inserted as a single unit.
         assertEquals(1, bufs.length);
         Helper.compare(bufs[0], "pizza");
+
+        // Test insertions at the end.
+        pool.writeString("pizza");
+        inserter = pool.insertBack();
+        buf = Helper.makeByteBuffer("yummy");
+        inserter.writeBuffer(buf);
+        inserter.close();
+
+        assertEquals(10, pool.remaining());
+        bufs = pool.build();
+        assertEquals(3, bufs.length);
+
+        Helper.compare(bufs[0], "pizz");
+        Helper.compare(bufs[1], "a");
+        Helper.compare(bufs[2], "yummy");
     }
 
     @Test
@@ -128,5 +143,17 @@ public class ByteBufferPoolTest {
         Helper.compare(bufs[1], " me ");
         Helper.compare(bufs[2], "plea");
         Helper.compare(bufs[3], "se!!");
+
+        // Test insertions at the end.
+        pool.writeString("pizza");
+        inserter = pool.insertBack();
+        inserter.writeString("yummy");
+        inserter.close();
+
+        bufs = pool.build();
+        assertEquals(3, bufs.length);
+        Helper.compare(bufs[0], "pizz");
+        Helper.compare(bufs[1], "ayum");
+        Helper.compare(bufs[2], "my");
     }
 }
