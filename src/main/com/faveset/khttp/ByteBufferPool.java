@@ -21,23 +21,43 @@ class ByteBufferPool {
      */
     class Inserter {
         private ListIterator<ByteBuffer> mIter;
+        private ByteBuffer mRemainingBuf;
 
         private Inserter(ListIterator<ByteBuffer> iter) {
             mIter = iter;
         }
 
         /**
+         * This must be called when done writing to the Inserter to finalize
+         * insertion operations.
+         */
+        public void close() {
+            if (mRemainingBuf != null) {
+                mRemainingBuf.flip();
+
+                // Update the byte counter.
+                mRemaining += mRemainingBuf.remaining();
+
+                mRemainingBuf = null;
+            }
+        }
+
+        /**
          * Adds buf to the new sequence starting at the Inserter.
+         *
+         * One must call close() to finalize all operations.
          */
         public void writeBuffer(ByteBuffer buf) {
-            ByteBufferPool.this.insertBuffer(mIter, buf);
+            mRemainingBuf = ByteBufferPool.this.insertBuffer(mIter, mRemainingBuf, buf);
         }
 
         /**
          * Adds s to the new sequence starting at the Inserter.
+         *
+         * One must call close() to finalize all operations.
          */
         public void writeString(String s) {
-            ByteBufferPool.this.insertString(mIter, s);
+            mRemainingBuf = ByteBufferPool.this.insertString(mIter, mRemainingBuf, s);
         }
     }
 
@@ -107,17 +127,28 @@ class ByteBufferPool {
 
     /**
      * @param iter
+     * @param currBuf the remaining ByteBuffer with which to continue
+     * appending data to.  It will be committed to the total byte count as
+     * necessary.  One may pass null if no remainder buffer currently exists.
      * @param buf will be added after iter.
+     *
+     * @return the remainder buffer after adding all of s to the insertion
+     * point or null if no partially filled buffer remains.  If non-null, the
+     * buffer will already be inserted and will be guaranteed to have
+     * free space for future writes.
      */
-    private void insertBuffer(ListIterator<ByteBuffer> iter, ByteBuffer buf) {
-        if (iter.nextIndex() == mBufs.size()) {
-            // This is the tail.
-            writeBuffer(buf);
-            return;
+    private ByteBuffer insertBuffer(ListIterator<ByteBuffer> iter,
+            ByteBuffer currBuf, ByteBuffer buf) {
+        if (buf.remaining() == 0) {
+            // We have no work.
+            return currBuf;
         }
 
-        if (buf.remaining() == 0) {
-            return;
+        if (currBuf != null) {
+            // Commit the remainder buf.
+            currBuf.flip();
+            mRemaining += currBuf.remaining();
+            currBuf = null;
         }
 
         // Otherwise, we're not at the end of the list.  We don't need to
@@ -126,22 +157,8 @@ class ByteBufferPool {
 
         // Commit the count, since it's added as a whole.
         mRemaining += buf.remaining();
-    }
 
-    private void insertString(ListIterator<ByteBuffer> iter, String s) {
-        if (iter.nextIndex() == mBufs.size()) {
-            // This is the tail.
-            writeString(s);
-            return;
-        }
-
-        ByteBuffer remBuf = insertString(iter, null, s);
-
-        if (remBuf != null) {
-            // Always commit the remainder, since we are inserting mid-list.
-            remBuf.flip();
-            mRemaining += remBuf.remaining();
-        }
+        return currBuf;
     }
 
     /**
@@ -246,22 +263,7 @@ class ByteBufferPool {
      * @param buf must be positioned for subsequent reads.
      */
     public void writeBuffer(ByteBuffer buf) {
-        if (buf.remaining() == 0) {
-            return;
-        }
-
-        if (mCurrBuf != null) {
-            mCurrBuf.flip();
-
-            mRemaining += mCurrBuf.remaining();
-
-            mCurrBuf = null;
-        }
-
-        mBufs.add(buf.duplicate());
-
-        // Update the count, since buf is added as a whole.
-        mRemaining += buf.remaining();
+        mCurrBuf = insertBuffer(mBufs.listIterator(mBufs.size()), mCurrBuf, buf);
     }
 
     /**

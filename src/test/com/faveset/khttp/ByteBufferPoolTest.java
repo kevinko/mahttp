@@ -44,6 +44,7 @@ public class ByteBufferPoolTest {
         ByteBufferPool.Inserter inserter = pool.insertFront();
         buf = Helper.makeByteBuffer("foo");
         inserter.writeBuffer(buf);
+        inserter.close();
 
         assertEquals(15, pool.remaining());
 
@@ -61,6 +62,7 @@ public class ByteBufferPoolTest {
         inserter = pool.insertFront();
         buf = Helper.makeByteBuffer("pizza");
         inserter.writeBuffer(buf);
+        inserter.close();
 
         assertEquals(5, pool.remaining());
         bufs = pool.build();
@@ -98,6 +100,7 @@ public class ByteBufferPoolTest {
 
         ByteBufferPool.Inserter inserter = pool.insertFront();
         inserter.writeString("Save save SAVE!");
+        inserter.close();
         assertEquals(25, pool.remaining());
 
         bufs = pool.build();
@@ -117,6 +120,7 @@ public class ByteBufferPoolTest {
         // This is also a multiple of the buffer size 4 to test handling
         // of full buffers.
         inserter.writeString("Save me please!!");
+        inserter.close();
 
         bufs = pool.build();
         assertEquals(4, bufs.length);
