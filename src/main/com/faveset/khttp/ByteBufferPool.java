@@ -131,6 +131,20 @@ class ByteBufferPool {
     }
 
     /**
+     * The caller must close() the Inserter when done before calling any other
+     * write method, even if the Inserter is not used (e.g., with try-finally).
+     * This allows the inserter to continue from a prior remainder without
+     * wasting buffer space.
+     *
+     * @return an Inserter for inserting data at the back of the list.
+     */
+    public Inserter insertBack() {
+        Inserter inserter = new Inserter(mBufs.listIterator(mBufs.size()), mCurrBuf);
+        mCurrBuf = null;
+        return inserter;
+    }
+
+    /**
      * @param iter
      * @param currBuf the remaining ByteBuffer with which to continue
      * appending data to.  It will be committed to the total byte count as
@@ -164,20 +178,6 @@ class ByteBufferPool {
         mRemaining += buf.remaining();
 
         return currBuf;
-    }
-
-    /**
-     * The caller must close() the Inserter when done before calling any other
-     * write method, even if the Inserter is not used (e.g., with try-finally).
-     * This allows the inserter to continue from a prior remainder without
-     * wasting buffer space.
-     *
-     * @return an Inserter for inserting data at the back of the list.
-     */
-    public Inserter insertBack() {
-        Inserter inserter = new Inserter(mBufs.listIterator(mBufs.size()), mCurrBuf);
-        mCurrBuf = null;
-        return inserter;
     }
 
     /**
