@@ -171,7 +171,7 @@ class ByteBufferPool {
         }
 
         // Otherwise, we're not at the end of the list.  We don't need to
-        // modify mCurrBuf, since we're not touching it.
+        // modify currBuf, since we're not touching it.
         iter.add(buf.duplicate());
 
         // Commit the count, since it's added as a whole.
