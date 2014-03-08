@@ -118,6 +118,19 @@ public class Headers {
     }
 
     /**
+     * Writes headers in (HTTP) wire format to the inserter.  The inserter
+     * will not be closed on completion.
+     */
+    public void write(ByteBufferPool.Inserter inserter) {
+        for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
+            inserter.writeString(entry.getKey());
+            inserter.writeString(sHeaderDelim);
+            writeValueInserter(inserter, entry.getValue());
+            inserter.writeString(Strings.CRLF);
+        }
+    }
+
+    /**
      * Write the headers in (HTTP) wire format to the StringBuilder.
      *
      * @return the number of bytes written.
@@ -139,7 +152,7 @@ public class Headers {
     /**
      * Writes the values as a comma-separated list to buf.
      */
-    private void writeValue(ByteBuffer buf, List<String> values) throws BufferOverflowException {
+    private static void writeValue(ByteBuffer buf, List<String> values) throws BufferOverflowException {
         if (values.size() == 0) {
             return;
         }
@@ -153,7 +166,24 @@ public class Headers {
         }
     }
 
-    private void writeValuePool(ByteBufferPool pool, List<String> values) {
+    /**
+     * inserter will not be closed.
+     */
+    private static void writeValueInserter(ByteBufferPool.Inserter inserter, List<String> values) {
+        if (values.size() == 0) {
+            return;
+        }
+
+        Iterator<String> iter = values.iterator();
+        inserter.writeString(iter.next());
+
+        while (iter.hasNext()) {
+            inserter.writeString(sHeaderValueDelim);
+            inserter.writeString(iter.next());
+        }
+    }
+
+    private static void writeValuePool(ByteBufferPool pool, List<String> values) {
         if (values.size() == 0) {
             return;
         }

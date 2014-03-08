@@ -57,6 +57,63 @@ public class HeadersTest extends Headers {
     }
 
     @Test
+    public void testWriteInserter() {
+        HeadersBuilder builder = new HeadersBuilder();
+        builder.add("hello", "world");
+        builder.add("hello", "how");
+        builder.add("hello", "are");
+        builder.add("hello", "you");
+
+        ByteBufferPool pool = new ByteBufferPool(4, false);
+        pool.writeString("pizza!");
+
+        assertEquals(6, pool.remaining());
+
+        ByteBufferPool.Inserter inserter = pool.insertBack();
+        try {
+            builder.write(inserter);
+        } finally {
+            inserter.close();
+        }
+        assertEquals(32, pool.remaining());
+
+        ByteBuffer[] bufs = pool.build();
+        assertEquals(8, bufs.length);
+        Helper.compare(bufs[0], "pizz");
+        Helper.compare(bufs[1], "a!He");
+        Helper.compare(bufs[2], "llo:");
+        Helper.compare(bufs[3], " wor");
+        Helper.compare(bufs[4], "ld,h");
+        Helper.compare(bufs[5], "ow,a");
+        Helper.compare(bufs[6], "re,y");
+        Helper.compare(bufs[7], "ou\r\n");
+
+        // Try insertFront.
+        pool.writeString("pizza!");
+        assertEquals(6, pool.remaining());
+
+        inserter = pool.insertFront();
+        try {
+            builder.write(inserter);
+        } finally {
+            inserter.close();
+        }
+        assertEquals(32, pool.remaining());
+
+        bufs = pool.build();
+        assertEquals(9, bufs.length);
+        Helper.compare(bufs[0], "Hell");
+        Helper.compare(bufs[1], "o: w");
+        Helper.compare(bufs[2], "orld");
+        Helper.compare(bufs[3], ",how");
+        Helper.compare(bufs[4], ",are");
+        Helper.compare(bufs[5], ",you");
+        Helper.compare(bufs[6], "\r\n");
+        Helper.compare(bufs[7], "pizz");
+        Helper.compare(bufs[8], "a!");
+    }
+
+    @Test
     public void testWritePool() {
         ByteBufferPool pool = new ByteBufferPool(4, false);
 
