@@ -52,8 +52,10 @@ class ResponseWriter implements HttpResponseWriter {
 
     public ResponseWriter() {
         mHeadersBuilder = new HeadersBuilder();
+
         // Use direct allocations.
         mBufPool = new ByteBufferPool(sBufferSize, true);
+
         mNbcSendCallback = new NonBlockingConnection.OnSendCallback() {
             public void onSend(NonBlockingConnection conn) {
                 mSendCallback.onSend();
@@ -69,7 +71,9 @@ class ResponseWriter implements HttpResponseWriter {
      */
     public void clear() {
         mHeadersBuilder.clear();
+
         mBufPool.clear();
+
         mWroteHeaders = false;
         mHttpMinorVersion = sHttpMinorVersionDefault;
         mStatus = HttpStatus.OK;
@@ -99,11 +103,26 @@ class ResponseWriter implements HttpResponseWriter {
      * NonBlockingConnection callbacks until completion and then calls
      * callback when sending is done.
      *
+     * This method is not idempotent.  The response body will be cleared as
+     * a result.
+     *
      * The callback should clear the ResponseWriter's state before reusing
      * the ResponseWriter.
      */
     public void send(NonBlockingConnection conn, OnSendCallback callback) {
         mSendCallback = callback;
+
+        // We just support Content-length for now.
+        // TODO: this will need to be changed if we support transfer encodings.
+        Long bodyCount = mBufPool.remaining();
+        mHeadersBuilder.set(HeaderField.Entity.CONTENT_LENGTH, bodyCount.toString());
+
+        ByteBufferPool.Inserter inserter = mBufPool.insertFront();
+        try {
+            writeStatusHeaders(inserter, mStatus);
+        } finally {
+            inserter.close();
+        }
 
         long remCount = mBufPool.remaining();
         mSentCount = remCount;
@@ -142,17 +161,28 @@ class ResponseWriter implements HttpResponseWriter {
     }
 
     /**
-     * Prepares and writes an HTTP response header with given status code.
-     * If not called, the other write methods will call this implicitly with
-     * status OK.
+     * Designates that the response header should contain the given status
+     * code.  If not called, the other write methods will call this implicitly
+     * with status code HttpStatus.OK.
+     *
+     * Response headers in the HeadersBuilder will take effect on send, so
+     * they can still be modified after this method is called.
+     *
+     * Only the first call to this will take precedence.
      */
-    public void writeHeader(int statusCode) throws BufferOverflowException {
+    public void writeHeader(int statusCode) {
         if (mWroteHeaders) {
             return;
         }
 
         mStatus = statusCode;
+        mWroteHeaders = true;
+    }
 
+    /**
+     * Writes the Status-Line and Headers in wire format to the inserter.
+     */
+    private void writeStatusHeaders(ByteBufferPool.Inserter inserter, int statusCode) {
         String reason = sReasonMap.get(statusCode);
         if (reason == null) {
             reason = sUnknownReason;
@@ -160,16 +190,14 @@ class ResponseWriter implements HttpResponseWriter {
 
         String statusLine = String.format("HTTP/1.%d %d, %s\r\n",
                 mHttpMinorVersion, statusCode, reason);
-        mBufPool.writeString(statusLine);
+        inserter.writeString(statusLine);
 
-        mHeadersBuilder.write(mBufPool);
+        mHeadersBuilder.write(inserter);
 
         // Terminal CRLF.
-        mBufPool.writeString(Strings.CRLF);
+        inserter.writeString(Strings.CRLF);
 
         // We're now ready for the message-body.
-
-        mWroteHeaders = true;
     }
 
     static {

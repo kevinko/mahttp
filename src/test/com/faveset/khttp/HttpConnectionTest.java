@@ -99,6 +99,8 @@ public class HttpConnectionTest {
                     String line = Helper.readLine(is);
                     assertEquals("HTTP/1.0 404, Not Found\r\n", line);
                     line = Helper.readLine(is);
+                    assertEquals("Content-Length: 0\r\n", line);
+                    line = Helper.readLine(is);
                     assertEquals("\r\n", line);
 
                     // Try reading once more, since connections are pipelined.
@@ -108,6 +110,9 @@ public class HttpConnectionTest {
 
                     line = Helper.readLine(is);
                     assertEquals("HTTP/1.1 404, Not Found\r\n", line);
+
+                    line = Helper.readLine(is);
+                    assertEquals("Content-Length: 0\r\n", line);
 
                     line = Helper.readLine(is);
                     assertEquals("\r\n", line);
