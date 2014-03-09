@@ -21,7 +21,7 @@ class Strings {
      * Returns a String created from buf at buf's current position using its
      * remaining length.
      */
-    private static String byteBufferToString(ByteBuffer buf) {
+    public static String byteBufferToString(ByteBuffer buf) {
         if (buf.hasArray()) {
             int offset = buf.arrayOffset() + buf.position();
             return new String(buf.array(), offset, buf.remaining(), sUsAsciiCharset);
