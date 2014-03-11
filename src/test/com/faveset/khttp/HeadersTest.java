@@ -4,8 +4,11 @@ package com.faveset.khttp;
 
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -18,6 +21,33 @@ public class HeadersTest extends Headers {
         assertEquals("Hello", canonicalizeKey("hello"));
         assertEquals("Hello-World", canonicalizeKey("hello-world"));
         assertEquals("-Ello-World", canonicalizeKey("-ello-world"));
+    }
+
+    @Test
+    public void testGet() {
+        HeadersBuilder builder = new HeadersBuilder();
+        builder.add("hello", "world");
+        builder.add("hello", "how, am, i");
+        builder.add("hello", "are");
+        builder.add("hello", "you");
+
+        List<String> resultList = builder.get("hello");
+        assertEquals(4, resultList.size());
+        assertEquals("world", resultList.get(0));
+        assertEquals("how, am, i", resultList.get(1));
+        assertEquals("are", resultList.get(2));
+        assertEquals("you", resultList.get(3));
+
+        assertEquals("world", builder.getFirst("hello"));
+
+        Set<String> resultSet = builder.getValueSet("hello");
+        assertEquals(6, resultSet.size());
+        assertTrue(resultSet.contains("world"));
+        assertTrue(resultSet.contains("how"));
+        assertTrue(resultSet.contains("am"));
+        assertTrue(resultSet.contains("i"));
+        assertTrue(resultSet.contains("are"));
+        assertTrue(resultSet.contains("you"));
     }
 
     @Test

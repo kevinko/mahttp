@@ -6,10 +6,12 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Represents the key-value pairs in an HTTP headers.
@@ -71,6 +73,21 @@ public class Headers {
             return null;
         }
         return l.get(0);
+    }
+
+    /**
+     * Tokenizes the value associated with key and returns the result as a Set.
+     * The value will be split and trimmed along comma-delimiters.
+     */
+    public Set<String> getValueSet(String key) {
+        Set<String> results = new HashSet<String>();
+
+        List<String> resultList = get(key);
+        for (String v : resultList) {
+            Strings.splitTrim(results, v, ',');
+        }
+
+        return results;
     }
 
     /**
