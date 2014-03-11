@@ -12,6 +12,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Set;
 
 import com.faveset.log.Log;
 import com.faveset.log.NullLog;
@@ -149,6 +150,24 @@ class HttpConnection {
     }
 
     /**
+     * Performs initial configuration of the ResponseWriter according
+     * to the request.
+     */
+    private void configureWriter(HttpRequest req, ResponseWriter w) {
+        // Check for Connection close.
+        Set<String> values = req.getHeaders().getValueSet(HeaderField.General.CONNECTION);
+        w.setCloseConnection(values.contains(HeaderToken.CLOSE));
+
+        int minorVersion = req.getMinorVersion();
+        w.setHttpMinorVersion(minorVersion);
+
+        if (minorVersion == 0) {
+            // HTTP/1.0 does not support persistent connections.
+            w.setCloseConnection(true);
+        }
+    }
+
+    /**
      * @return the current time in common log format
      *
      * [day/month/year:hour:minute:second zone]
@@ -203,7 +222,7 @@ class HttpConnection {
 
     private boolean handleRequest(HttpRequest req, ByteBuffer data, ResponseWriter w) {
         // Prepare the writer.
-        w.setHttpMinorVersion(req.getMinorVersion());
+        configureWriter(req, w);
 
         String uri = req.getUri();
         HttpHandler handler = mHttpHandlerMap.get(uri);
@@ -230,7 +249,8 @@ class HttpConnection {
 
     /**
      * Called after the HTTP response has been sent to the client.  This
-     * reconfigures the HttpConnection to listen for another request.
+     * reconfigures the HttpConnection to listen for another request unless
+     * specified otherwise by the ResponseWriter.
      */
     private void handleSendResponse() {
         // We're done sending the response; log the result.
@@ -238,6 +258,12 @@ class HttpConnection {
         ResponseWriter w = mHandlerState.getResponseWriter();
         logRequest(mHandlerState.getRequestBuilder(), remoteAddrStr,
                 w.getStatus(), w.getSentCount());
+
+        if (w.getCloseConnection()) {
+            // We are done, so clean up.
+            handleClose(mConn);
+            return;
+        }
 
         mState = State.REQUEST_START;
 

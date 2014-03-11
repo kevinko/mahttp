@@ -84,26 +84,75 @@ public class HttpConnectionTest {
         }
     }
 
+    /**
+     * Checks for Connection close and Content-length 0 headers.
+     * Loops until the headers are found.
+     */
+    private void checkEmptyConnectionClose(InputStream is) throws IOException {
+        // Header order is undetermined.
+        // HTTP/1.0 is never persistent.
+        boolean hasConnectionClose = false;
+        boolean hasContentLength = false;
+        do {
+            String line = Helper.readLine(is);
+
+            if (line.startsWith("Connection:")) {
+                assertEquals("Connection: close\r\n", line);
+                hasConnectionClose = true;
+            }
+
+            if (line.startsWith("Content-Length:")) {
+                assertEquals("Content-Length: 0\r\n", line);
+                hasContentLength = true;
+            }
+        } while (!hasConnectionClose || !hasContentLength);
+    }
+
+    private Tester makeSimpleTester(Helper.ServerThread.Task task) {
+        return new Tester(task) {
+            private void handleClose(HttpConnection conn) {
+                try {
+                    conn.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            protected void prepareConn(HttpConnection conn) {
+                conn.setOnCloseCallback(new HttpConnection.OnCloseCallback() {
+                    public void onClose(HttpConnection conn) {
+                        handleClose(conn);
+                    }
+                });
+
+                Map<String, HttpHandler> handlers = new HashMap<String, HttpHandler>();
+                conn.start(handlers);
+            }
+        };
+    }
+
     @Test
     public void test() throws IOException, InterruptedException {
-        Tester tester = new Tester(new Helper.ServerThread.Task() {
+        Tester tester = makeSimpleTester(new Helper.ServerThread.Task() {
             public void run(Socket sock) {
                 try {
                     OutputStream os = sock.getOutputStream();
                     PrintWriter w = new PrintWriter(os);
-                    w.print("GET / HTTP/1.0\r\n");
+                    w.print("GET / HTTP/1.1\r\n");
                     w.print("\r\n");
                     w.flush();
 
                     InputStream is = sock.getInputStream();
                     String line = Helper.readLine(is);
-                    assertEquals("HTTP/1.0 404, Not Found\r\n", line);
+                    assertEquals("HTTP/1.1 404, Not Found\r\n", line);
                     line = Helper.readLine(is);
                     assertEquals("Content-Length: 0\r\n", line);
                     line = Helper.readLine(is);
                     assertEquals("\r\n", line);
 
-                    // Try reading once more, since connections are pipelined.
+                    // Try reading once more, since connections are persistent
+                    // with HTTP/1.1.
                     w.print("GET / HTTP/1.1\r\n");
                     w.print("\r\n");
                     w.flush();
@@ -137,27 +186,76 @@ public class HttpConnectionTest {
                     throw new RuntimeException(e);
                 }
             }
-        }) {
-            private void handleClose(HttpConnection conn) {
+        });
+        tester.run();
+    }
+
+    @Test
+    public void testClose() throws IOException, InterruptedException {
+        Tester tester = makeSimpleTester(new Helper.ServerThread.Task() {
+            public void run(Socket sock) {
                 try {
-                    conn.close();
+                    OutputStream os = sock.getOutputStream();
+                    PrintWriter w = new PrintWriter(os);
+                    w.print("GET / HTTP/1.1\r\n");
+                    w.print("connection:    close   \r\n");
+                    w.print("\r\n");
+                    w.flush();
+
+                    InputStream is = sock.getInputStream();
+                    String line = Helper.readLine(is);
+                    assertEquals("HTTP/1.1 404, Not Found\r\n", line);
+
+                    checkEmptyConnectionClose(is);
+
+                    line = Helper.readLine(is);
+                    assertEquals("\r\n", line);
+
+                    // Try reading once more, which should signify a
+                    // connection close.
+                    line = Helper.readLine(is);
+                    assertEquals("", line);
+
+                    sock.close();
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
             }
+        });
+        tester.run();
+    }
 
-            @Override
-            protected void prepareConn(HttpConnection conn) {
-                conn.setOnCloseCallback(new HttpConnection.OnCloseCallback() {
-                    public void onClose(HttpConnection conn) {
-                        handleClose(conn);
-                    }
-                });
+    @Test
+    public void testLegacyClose() throws IOException, InterruptedException {
+        Tester tester = makeSimpleTester(new Helper.ServerThread.Task() {
+            public void run(Socket sock) {
+                try {
+                    OutputStream os = sock.getOutputStream();
+                    PrintWriter w = new PrintWriter(os);
+                    w.print("GET / HTTP/1.0\r\n");
+                    w.print("\r\n");
+                    w.flush();
 
-                Map<String, HttpHandler> handlers = new HashMap<String, HttpHandler>();
-                conn.start(handlers);
+                    InputStream is = sock.getInputStream();
+                    String line = Helper.readLine(is);
+                    assertEquals("HTTP/1.0 404, Not Found\r\n", line);
+
+                    checkEmptyConnectionClose(is);
+
+                    line = Helper.readLine(is);
+                    assertEquals("\r\n", line);
+
+                    // Try reading once more, which should signify a
+                    // connection close.
+                    line = Helper.readLine(is);
+                    assertEquals("", line);
+
+                    sock.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
-        };
+        });
         tester.run();
     }
 }

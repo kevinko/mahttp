@@ -7,7 +7,18 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 
 public interface HttpResponseWriter {
+    /**
+     * NOTE: the Connection header will not take effect.
+     * Use setCloseConnection() instead.
+     */
     HeadersBuilder getHeadersBuilder();
+
+    /**
+     * Set to close the connection after sending the response.
+     * Connections will persist by default unless requested by the client
+     * (via the Connection header).
+     */
+    void setCloseConnection(boolean close);
 
     /**
      * Add buf to the response body.

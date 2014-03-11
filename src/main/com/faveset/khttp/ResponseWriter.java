@@ -50,6 +50,10 @@ class ResponseWriter implements HttpResponseWriter {
     // Tracks the number of bytes sent for the result.
     private long mSentCount;
 
+    // Designates that the connection should be closed after the response
+    // is sent.
+    private boolean mCloseConnection;
+
     public ResponseWriter() {
         mHeadersBuilder = new HeadersBuilder();
 
@@ -78,10 +82,20 @@ class ResponseWriter implements HttpResponseWriter {
         mHttpMinorVersion = sHttpMinorVersionDefault;
         mStatus = HttpStatus.OK;
         mSentCount = 0;
+
+        mCloseConnection = false;
     }
 
+    /**
+     * NOTE: the Connection header will not take effect.
+     * Use setCloseConnection() instead.
+     */
     public HeadersBuilder getHeadersBuilder() {
         return mHeadersBuilder;
+    }
+
+    public boolean getCloseConnection() {
+        return mCloseConnection;
     }
 
     /**
@@ -117,6 +131,11 @@ class ResponseWriter implements HttpResponseWriter {
         Long bodyCount = mBufPool.remaining();
         mHeadersBuilder.set(HeaderField.Entity.CONTENT_LENGTH, bodyCount.toString());
 
+        // Configure the Connection header if we are closing the connection.
+        if (mCloseConnection) {
+            mHeadersBuilder.set(HeaderField.General.CONNECTION, HeaderToken.CLOSE);
+        }
+
         ByteBufferPool.Inserter inserter = mBufPool.insertFront();
         try {
             writeStatusHeaders(inserter, mStatus);
@@ -129,6 +148,10 @@ class ResponseWriter implements HttpResponseWriter {
 
         ByteBuffer[] bufs = mBufPool.build();
         conn.send(mNbcSendCallback, bufs, remCount);
+    }
+
+    public void setCloseConnection(boolean close) {
+        mCloseConnection = close;
     }
 
     /**
