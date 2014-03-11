@@ -83,8 +83,10 @@ public class Headers {
         Set<String> results = new HashSet<String>();
 
         List<String> resultList = get(key);
-        for (String v : resultList) {
-            Strings.splitTrim(results, v, ',');
+        if (resultList != null) {
+            for (String v : resultList) {
+                Strings.splitTrim(results, v, ',');
+            }
         }
 
         return results;
