@@ -8,6 +8,7 @@ import java.nio.charset.Charset;
 import java.nio.channels.SelectionKey;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
@@ -386,25 +387,32 @@ class Strings {
      * elements.
      */
     public static List<String> splitTrim(String s, char delim) {
-        List<String> resultList = new ArrayList<String>();
+        return splitTrim(new ArrayList<String>(), s, delim);
+    }
 
+    /**
+     * @param results is the result set to add to.
+     * @param s the string to split.
+     * @param delim the delimiter for splitting.
+     */
+    public static <T extends Collection<String>> T splitTrim(T results, String s, char delim) {
         int index = 0;
         while (index < s.length()) {
             String word = parseWordString(s, delim, index);
-            resultList.add(word.trim());
+            results.add(word.trim());
 
             int delimIndex = index + word.length();
             if (delimIndex == s.length() - 1) {
                 // Handle the special case when nothing follows the final
                 // delimiter.
-                resultList.add("");
+                results.add("");
             }
 
             // Skip over the delimiter.
             index = delimIndex + 1;
         }
 
-        return resultList;
+        return results;
     }
 
     /**
