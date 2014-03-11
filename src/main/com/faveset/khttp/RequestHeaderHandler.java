@@ -7,6 +7,28 @@ import java.nio.ByteBuffer;
 
 class RequestHeaderHandler implements StateHandler {
     /**
+     * Handles a continuation line.
+     *
+     * @param lineBuf the current line buffer.
+     * @param lastHeaderName the name of the last processed header.
+     * @param builder the HeadersBuilder to update.
+     *
+     * @throws InvalidRequestException will be thrown if an invalid
+     * continuation is detected.
+     */
+    private static void handleContinuation(ByteBuffer lineBuf,
+            String lastHeaderName, HeadersBuilder builder) throws InvalidRequestException {
+        if (lastHeaderName.isEmpty()) {
+            throw new InvalidRequestException("Invalid request header continuation", HttpStatus.BAD_REQUEST);
+        }
+
+        String addedValue = parseHeaderValue(lineBuf);
+
+        // Append to the last added header value.
+        builder.appendValue(lastHeaderName, addedValue);
+    }
+
+    /**
      * Parses a set of request headers from buf and populates req.
      * state's LastHeaderName will be updated as each header is parsed.
      *
@@ -21,45 +43,36 @@ class RequestHeaderHandler implements StateHandler {
     public boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
         HttpRequestBuilder req = state.getRequestBuilder();
 
-        if (Strings.hasLeadingCrlf(buf)) {
-            // We found the lone CRLF.  We're done.
-            return true;
-        }
-
-        ByteBuffer lineBuf;
-        try {
-            lineBuf = Strings.parseLine(buf);
-        } catch (BufferOverflowException e) {
-            throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.REQUEST_URI_TOO_LONG);
-        }
-
-        if (lineBuf == null) {
-            // We need more data.  buf was compacted by parseLine.
-            return false;
-        }
-
-        if (Strings.hasLeadingSpace(lineBuf)) {
-            // Handle continuations.
-            String lastHeaderName = state.getLastHeaderName();
-            if (lastHeaderName.isEmpty()) {
-                throw new InvalidRequestException("Invalid request header continuation", HttpStatus.BAD_REQUEST);
+        do {
+            if (Strings.hasLeadingCrlf(buf)) {
+                // We found the lone CRLF.  We're done with this state.
+                return true;
             }
 
-            String addedValue = parseHeaderValue(lineBuf);
+            ByteBuffer lineBuf;
+            try {
+                lineBuf = Strings.parseLine(buf);
+            } catch (BufferOverflowException e) {
+                throw new InvalidRequestException("Request-Line exceeded buffer", HttpStatus.REQUEST_URI_TOO_LONG);
+            }
 
-            // Append to the last added header value.
-            req.getHeadersBuilder().appendValue(lastHeaderName, addedValue);
-            return false;
-        }
+            if (lineBuf == null) {
+                // We need more data.  buf was compacted by parseLine.
+                return false;
+            }
 
-        try {
-            // This updates mLastHeaderName.
-            parseHeaderLine(lineBuf, state);
-        } catch (ParseException e) {
-            throw new InvalidRequestException("could not parse header line", HttpStatus.BAD_REQUEST);
-        }
+            if (Strings.hasLeadingSpace(lineBuf)) {
+                handleContinuation(lineBuf, state.getLastHeaderName(), req.getHeadersBuilder());
+                continue;
+            }
 
-        return false;
+            try {
+                // This updates mLastHeaderName.
+                parseHeaderLine(lineBuf, state);
+            } catch (ParseException e) {
+                throw new InvalidRequestException("could not parse header line", HttpStatus.BAD_REQUEST);
+            }
+        } while (true);
     }
 
     /**
@@ -71,7 +84,7 @@ class RequestHeaderHandler implements StateHandler {
      * provided via parseLine.
      * @throws ParseException if the header is malformed.
      */
-    private void parseHeaderLine(ByteBuffer lineBuf, HandlerState state) throws ParseException {
+    private static void parseHeaderLine(ByteBuffer lineBuf, HandlerState state) throws ParseException {
         HttpRequestBuilder req = state.getRequestBuilder();
 
         String fieldName = Strings.parseToken(lineBuf);

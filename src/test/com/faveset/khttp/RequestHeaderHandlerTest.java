@@ -83,6 +83,24 @@ public class RequestHeaderHandlerTest {
     }
 
     @Test
+    public void testMultiple() throws InvalidRequestException {
+        ByteBuffer buf = ByteBuffer.allocate(1024);
+        buf.put(Helper.makeByteBuffer("hello: world\r\nfoo: bar\r\n hid!\r\n\r\n"));
+        buf.flip();
+
+        HandlerState state = new HandlerState();
+
+        RequestHeaderHandler handler = new RequestHeaderHandler();
+        assertTrue(handler.handleState(null, buf, state));
+
+        HeadersBuilder headers = state.getRequestBuilder().getHeadersBuilder();
+        assertEquals(1, headers.get("hello").size());
+        assertEquals("world", headers.getFirst("hello"));
+        assertEquals(1, headers.get("foo").size());
+        assertEquals("bar hid!", headers.getFirst("foo"));
+    }
+
+    @Test
     public void testPartial() throws InvalidRequestException {
         ByteBuffer buf = ByteBuffer.allocate(1024);
         buf.put(Helper.makeByteBuffer("hello: wor"));
