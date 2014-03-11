@@ -8,6 +8,7 @@ import java.net.ServerSocket;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 
 import java.nio.channels.Selector;
@@ -139,24 +140,32 @@ public class HttpServer {
         while (true) {
             // The return value of select() (number of keys whose
             // ready-operation sets were updated) is not the best indicator
-            // to check for completeness, since a key will not be counted
-            // if its ready set does not change.  (It might have been read
-            // ready before the select() and read ready after, which would
-            // not be counted.)
+            // to check for completeness for two reasons:
+            //
+            // 1) A key will not be counted if its ready set does not change.
+            // (It might have been read ready before the select() and read
+            // ready after, which would not be counted.)
+            //
+            // 2) It might take an indefinite period of time to finish handling
+            // connections before we get an empty selection result.
             mSelector.select();
 
             if (mIsDone) {
                 break;
             }
 
-            Set<SelectionKey> readyKeys = mSelector.selectedKeys();
-            for (SelectionKey key : readyKeys) {
+            Iterator<SelectionKey> iter = mSelector.selectedKeys().iterator();
+            while (iter.hasNext()) {
+                SelectionKey key = iter.next();
                 if (!key.isValid()) {
                     continue;
                 }
 
                 SelectorHandler handler = (SelectorHandler) key.attachment();
                 handler.onReady(key);
+
+                // Remove for the next selection loop.
+                iter.remove();
             }
         }
 
