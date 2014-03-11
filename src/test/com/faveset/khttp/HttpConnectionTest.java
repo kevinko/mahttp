@@ -117,6 +117,21 @@ public class HttpConnectionTest {
                     line = Helper.readLine(is);
                     assertEquals("\r\n", line);
 
+                    // Try with headers.
+                    w.print("GET / HTTP/1.1\r\n");
+                    w.print("User-Agent: curl/7.22.0 (x86_64-pc-linux-gnu) libcurl/7.22.0 OpenSSL/1.0.1 zlib/1.2.3.4 libidn/1.23 librtmp/2.3\r\n");
+                    w.print("Host: localhost:5123\r\n");
+                    w.print("Accept: */*\r\n");
+                    w.print("\r\n");
+                    w.flush();
+
+                    line = Helper.readLine(is);
+                    assertEquals("HTTP/1.1 404, Not Found\r\n", line);
+                    line = Helper.readLine(is);
+                    assertEquals("Content-Length: 0\r\n", line);
+                    line = Helper.readLine(is);
+                    assertEquals("\r\n", line);
+
                     sock.close();
                 } catch (IOException e) {
                     throw new RuntimeException(e);
@@ -141,11 +156,6 @@ public class HttpConnectionTest {
 
                 Map<String, HttpHandler> handlers = new HashMap<String, HttpHandler>();
                 conn.start(handlers);
-            }
-
-            @Override
-            protected void finish() {
-                super.finish();
             }
         };
         tester.run();
