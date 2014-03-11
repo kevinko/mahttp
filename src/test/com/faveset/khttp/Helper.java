@@ -73,16 +73,24 @@ class Helper {
     /**
      * Reads until a '\n', and returns the line as a string, with '\n'
      * included.
+     *
+     * Returns the empty string if EOF is reached.
      */
     public static String readLine(InputStream input) throws IOException {
         StringBuilder builder = new StringBuilder();
         while (true) {
-            char ch = (char) input.read();
+            int v = input.read();
+            if (v == -1) {
+                break;
+            }
+
+            char ch = (char) v;
             builder.append(ch);
 
             if (ch == '\n') {
-                return builder.toString();
+                break;
             }
         }
+        return builder.toString();
     }
 }
