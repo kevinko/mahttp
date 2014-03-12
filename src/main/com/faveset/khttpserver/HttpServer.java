@@ -10,21 +10,37 @@ import com.faveset.khttp.HttpHandler;
 import com.faveset.khttp.HttpRequest;
 import com.faveset.khttp.HttpResponseWriter;
 
+import com.faveset.flags.BoolFlag;
+import com.faveset.flags.Flags;
 import com.faveset.log.OutputStreamLog;
 
 public class HttpServer {
-    public static void main(String[] args) throws IOException {
-        if (args.length < 1) {
-            System.out.println("<port>");
+    private static BoolFlag mLogFlag =
+        Flags.registerBool("log", false, "enable logging to stdout");
+
+    public static void main(String[] args) throws IOException, IllegalArgumentException {
+        Flags.parse(args);
+
+        Flags flags = Flags.get();
+        if (flags.getArgSize() < 1) {
+            StringBuilder builder = new StringBuilder();
+            builder.append("<port>\n");
+            flags.writeHelp(builder);
+
+            System.out.println(builder.toString());
             return;
         }
 
-        int port = new Integer(args[0]);
-
-        OutputStreamLog log = new OutputStreamLog(System.out);
+        int port = new Integer(flags.getArg(0));
 
         final com.faveset.khttp.HttpServer server = new com.faveset.khttp.HttpServer();
-        server.setLog(log);
+
+        OutputStreamLog log = null;
+        if (mLogFlag.get()) {
+            System.out.println("logging to stdout");
+            log = new OutputStreamLog(System.out);
+            server.setLog(log);
+        }
 
         // Set up the signal handler for exiting the server.
         Signal.handle(new Signal("INT"), new SignalHandler() {
@@ -44,6 +60,8 @@ public class HttpServer {
         });
         server.listenAndServe("::", port);
 
-        log.close();
+        if (log != null) {
+            log.close();
+        }
     }
 }
