@@ -84,28 +84,105 @@ public class HttpConnectionTest {
         }
     }
 
+    private static class ExpectedHeader {
+        private boolean mSeen;
+        private String mKey;
+        private String mValue;
+
+        public ExpectedHeader(String key, String value) {
+            mKey = key;
+            mValue = value;
+        }
+
+        public String getKey() {
+            return mKey;
+        }
+
+        public String getValue() {
+            return mValue;
+        }
+
+        /**
+         * @return true if seen for the first time.
+         */
+        public boolean setSeen() {
+            boolean newlySeen = !mSeen;
+
+            mSeen = true;
+
+            return newlySeen;
+        }
+
+        /**
+         * @return true if the key-value matches the header line in s.
+         */
+        public boolean match(String s) {
+            String[] keyValue = parseKeyValue(s);
+            if (keyValue == null) {
+                return false;
+            }
+
+            String key = keyValue[0];
+            String value = keyValue[1];
+
+            if (!mKey.equals(key)) {
+                return false;
+            }
+            if (!mValue.equals(value)) {
+                return false;
+            }
+
+            // Check for a trailing CR-LF.
+            return (s.endsWith("\n") || s.endsWith("\r\n"));
+        }
+
+        /**
+         * @returns null if a key-value is not detected.
+         */
+        public static String[] parseKeyValue(String s) {
+            int splitIndex = s.indexOf(':');
+            if (splitIndex == -1) {
+                return null;
+            }
+            String key = s.substring(0, splitIndex).trim();
+            String value = s.substring(splitIndex + 1).trim();
+            return new String[]{key, value};
+        }
+    }
+
+    private static void checkHeaders(InputStream is,
+            ExpectedHeader[] expectedHeaders) throws IOException {
+        Map<String, ExpectedHeader> expectMap = new HashMap<String, ExpectedHeader>(expectedHeaders.length);
+        for (int ii = 0; ii < expectedHeaders.length; ii++) {
+            ExpectedHeader h = expectedHeaders[ii];
+            expectMap.put(h.getKey(), h);
+        }
+
+        int count = 0;
+        do {
+            String line = Helper.readLine(is);
+            String[] keyValue = ExpectedHeader.parseKeyValue(line);
+
+            ExpectedHeader h = expectMap.get(keyValue[0]);
+            assertTrue(h != null);
+
+            if (h.match(line)) {
+                if (h.setSeen()) {
+                    count++;
+                }
+            }
+        } while (count < expectMap.size());
+    }
+
     /**
      * Checks for Connection close and Content-length 0 headers.
      * Loops until the headers are found.
      */
     private void checkEmptyConnectionClose(InputStream is) throws IOException {
-        // Header order is undetermined.
-        // HTTP/1.0 is never persistent.
-        boolean hasConnectionClose = false;
-        boolean hasContentLength = false;
-        do {
-            String line = Helper.readLine(is);
-
-            if (line.startsWith("Connection:")) {
-                assertEquals("Connection: close\r\n", line);
-                hasConnectionClose = true;
-            }
-
-            if (line.startsWith("Content-Length:")) {
-                assertEquals("Content-Length: 0\r\n", line);
-                hasContentLength = true;
-            }
-        } while (!hasConnectionClose || !hasContentLength);
+        checkHeaders(is, new ExpectedHeader[]{
+            new ExpectedHeader("Connection", "close"),
+            new ExpectedHeader("Content-Length", "0"),
+        });
     }
 
     private Tester makeSimpleTester(Helper.ServerThread.Task task) {
@@ -240,8 +317,10 @@ public class HttpConnectionTest {
                     InputStream is = sock.getInputStream();
                     String line = Helper.readLine(is);
                     assertEquals("HTTP/1.0 404, Not Found\r\n", line);
-                    line = Helper.readLine(is);
-                    assertEquals("Content-Length: 0\r\n", line);
+                    checkHeaders(is, new ExpectedHeader[]{
+                        new ExpectedHeader("Content-Length", "0"),
+                        new ExpectedHeader("Connection", "Keep-Alive"),
+                    });
                     line = Helper.readLine(is);
                     assertEquals("\r\n", line);
 

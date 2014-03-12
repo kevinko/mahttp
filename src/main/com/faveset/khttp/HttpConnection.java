@@ -166,6 +166,8 @@ class HttpConnection {
             // check for HTTP/1.0 Keep-Alive support.
             if (!values.contains(HeaderToken.KEEP_ALIVE)) {
                 w.setCloseConnection(true);
+            } else {
+                w.getHeadersBuilder().set(HeaderField.General.CONNECTION, HeaderToken.KEEP_ALIVE);
             }
         }
     }
