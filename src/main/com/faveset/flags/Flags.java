@@ -54,10 +54,17 @@ public class Flags {
     }
 
     /**
-     * @return true if s is identified as a flag with a leading "-" or "--".
+     * @return the leading flag prefix ("-" or "--") or the empty String
+     * if none is found.
      */
-    private static boolean isFlag(String s) {
-        return (s.startsWith("-") || s.startsWith("--"));
+    private static String getFlagPrefix(String s) {
+        if (s.startsWith("--")) {
+            return "--";
+        }
+        if (s.startsWith("-")) {
+            return "-";
+        }
+        return "";
     }
 
     /**
@@ -78,7 +85,8 @@ public class Flags {
         final int len = args.length;
         for (int ii = 0; ii < len; ii++) {
             String arg = args[ii];
-            if (!isFlag(arg)) {
+            String flagPrefix = getFlagPrefix(arg);
+            if (flagPrefix.isEmpty()) {
                 mNonFlagArgs.add(arg);
                 continue;
             }
@@ -89,10 +97,10 @@ public class Flags {
 
             int equalsIndex = arg.indexOf("=");
             if (equalsIndex == -1) {
-                flagName = arg.substring(1);
+                flagName = arg.substring(flagPrefix.length());
                 flagValue = new String();
             } else {
-                flagName = arg.substring(1, equalsIndex);
+                flagName = arg.substring(flagPrefix.length(), equalsIndex);
                 flagValue = arg.substring(equalsIndex + 1);
             }
 
@@ -109,7 +117,7 @@ public class Flags {
                 int nextInd = ii + 1;
                 if (nextInd < len) {
                     String nextArg = args[nextInd];
-                    if (!isFlag(nextArg)) {
+                    if (getFlagPrefix(nextArg).isEmpty()) {
                         // We found the value.
                         flagValue = nextArg;
                     }
