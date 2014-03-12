@@ -9,12 +9,12 @@ import java.util.List;
 import java.util.ListIterator;
 
 /**
- * A ByteBufferPool manages a collection of ByteBuffers by dynamically
+ * A ByteBufferArrayBuilder manages a collection of ByteBuffers by dynamically
  * allocating them during a series string and buffer writes.
  */
-class ByteBufferPool {
+class ByteBufferArrayBuilder {
     /**
-     * An Inserter points to a specific place in the ByteBufferPool and
+     * An Inserter points to a specific place in the ByteBufferArrayBuilder and
      * lets one insert a new sequence of data after the pointer.  All write
      * methods are cumulative and will append to the new sequence of data
      * at the insertion point.
@@ -53,7 +53,7 @@ class ByteBufferPool {
          * One must call close() to finalize all operations.
          */
         public void writeBuffer(ByteBuffer buf) {
-            mRemainingBuf = ByteBufferPool.this.insertBuffer(mIter, mRemainingBuf, buf);
+            mRemainingBuf = ByteBufferArrayBuilder.this.insertBuffer(mIter, mRemainingBuf, buf);
         }
 
         /**
@@ -62,7 +62,7 @@ class ByteBufferPool {
          * One must call close() to finalize all operations.
          */
         public void writeString(String s) {
-            mRemainingBuf = ByteBufferPool.this.insertString(mIter, mRemainingBuf, s);
+            mRemainingBuf = ByteBufferArrayBuilder.this.insertString(mIter, mRemainingBuf, s);
         }
     }
 
@@ -83,7 +83,7 @@ class ByteBufferPool {
      * @param bufSize the size of each ByteBuffer to allocate.
      * @param isDirect true if a direct ByteBuffer should be allocated.
      */
-    public ByteBufferPool(int bufSize, boolean isDirect) {
+    public ByteBufferArrayBuilder(int bufSize, boolean isDirect) {
         mIsDirect = isDirect;
         mBufSize = bufSize;
         mBufs = new LinkedList<ByteBuffer>();
@@ -104,10 +104,10 @@ class ByteBufferPool {
     }
 
     /**
-     * Closes the pool to future writes and returns an array for consumption
+     * Closes the builder to future writes and returns an array for consumption
      * by a Channel.  The returned buffers will have total remaining bytes
-     * of remaining().  After build(), the pool will be reset (remaining() will
-     * be cleared).
+     * of remaining().  After build(), the builder will be reset (remaining()
+     * will be cleared).
      */
     public ByteBuffer[] build() {
         if (mCurrBuf != null) {
@@ -122,7 +122,7 @@ class ByteBufferPool {
     }
 
     /**
-     * Resets the pool to the initial state.
+     * Resets the builder to the initial state.
      */
     public void clear() {
         mCurrBuf = null;
@@ -181,8 +181,8 @@ class ByteBufferPool {
     }
 
     /**
-     * The Inserter is invalidated once the ByteBufferPool is modified
-     * by the pool's writeBuffer(), writeString() methods.
+     * The Inserter is invalidated once the ByteBufferArrayBuilder is modified
+     * by the builder's writeBuffer(), writeString() methods.
      *
      * The caller should take care to close() the Inserter when done.
      *
@@ -263,7 +263,7 @@ class ByteBufferPool {
 
     /**
      * Returns the total number of bytes remaining for all buffers within the
-     * pool.
+     * builder.
      */
     public long remaining() {
         long count = mRemaining;
@@ -288,7 +288,8 @@ class ByteBufferPool {
     }
 
     /**
-     * Writes s to the pool, allocating a new internal ByteBuffer if necessary.
+     * Writes s to the builder, allocating a new internal ByteBuffer if
+     * necessary.
      */
     public void writeString(String s) {
         // Just add to the tail.

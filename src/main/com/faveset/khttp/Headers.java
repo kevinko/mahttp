@@ -120,19 +120,19 @@ public class Headers {
     }
 
     /**
-     * Writes the headers in (HTTP) wire format to bufPool.
+     * Writes the headers in (HTTP) wire format to builder.
      *
      * @return the number of bytes written.
      */
-    public int write(ByteBufferPool bufPool) {
-        long start = bufPool.remaining();
+    public int write(ByteBufferArrayBuilder builder) {
+        long start = builder.remaining();
         for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
-            bufPool.writeString(entry.getKey());
-            bufPool.writeString(sHeaderDelim);
-            writeValuePool(bufPool, entry.getValue());
-            bufPool.writeString(Strings.CRLF);
+            builder.writeString(entry.getKey());
+            builder.writeString(sHeaderDelim);
+            writeValueBuilder(builder, entry.getValue());
+            builder.writeString(Strings.CRLF);
         }
-        long count = bufPool.remaining() - start;
+        long count = builder.remaining() - start;
         return (int) count;
     }
 
@@ -140,7 +140,7 @@ public class Headers {
      * Writes headers in (HTTP) wire format to the inserter.  The inserter
      * will not be closed on completion.
      */
-    public void write(ByteBufferPool.Inserter inserter) {
+    public void write(ByteBufferArrayBuilder.Inserter inserter) {
         for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
             inserter.writeString(entry.getKey());
             inserter.writeString(sHeaderDelim);
@@ -188,7 +188,7 @@ public class Headers {
     /**
      * inserter will not be closed.
      */
-    private static void writeValueInserter(ByteBufferPool.Inserter inserter, List<String> values) {
+    private static void writeValueInserter(ByteBufferArrayBuilder.Inserter inserter, List<String> values) {
         if (values.size() == 0) {
             return;
         }
@@ -202,17 +202,17 @@ public class Headers {
         }
     }
 
-    private static void writeValuePool(ByteBufferPool pool, List<String> values) {
+    private static void writeValueBuilder(ByteBufferArrayBuilder builder, List<String> values) {
         if (values.size() == 0) {
             return;
         }
 
         Iterator<String> iter = values.iterator();
-        pool.writeString(iter.next());
+        builder.writeString(iter.next());
 
         while (iter.hasNext()) {
-            pool.writeString(sHeaderValueDelim);
-            pool.writeString(iter.next());
+            builder.writeString(sHeaderValueDelim);
+            builder.writeString(iter.next());
         }
     }
 }

@@ -26,14 +26,14 @@ class ResponseWriter implements HttpResponseWriter {
     private static final String sUnknownReason = "Unknown";
 
     // Most web servers set the max total header length to 4-8KB, so
-    // we'll just choose a standard page size.  The pool will grow as
-    // needed; though, this size should handle most cases without additional
-    // allocations.
+    // we'll just choose a standard page size.  The ByteBufferArrayBuilder will
+    // grow as needed; though, this size should handle most cases without
+    // additional allocations.
     private static final int sBufferSize = 4096;
 
     private HeadersBuilder mHeadersBuilder;
 
-    private ByteBufferPool mBufPool;
+    private ByteBufferArrayBuilder mBufBuilder;
 
     private OnSendCallback mSendCallback;
 
@@ -58,7 +58,7 @@ class ResponseWriter implements HttpResponseWriter {
         mHeadersBuilder = new HeadersBuilder();
 
         // Use direct allocations.
-        mBufPool = new ByteBufferPool(sBufferSize, true);
+        mBufBuilder = new ByteBufferArrayBuilder(sBufferSize, true);
 
         mNbcSendCallback = new NonBlockingConnection.OnSendCallback() {
             public void onSend(NonBlockingConnection conn) {
@@ -76,7 +76,7 @@ class ResponseWriter implements HttpResponseWriter {
     public void clear() {
         mHeadersBuilder.clear();
 
-        mBufPool.clear();
+        mBufBuilder.clear();
 
         mWroteHeaders = false;
         mHttpMinorVersion = sHttpMinorVersionDefault;
@@ -128,7 +128,7 @@ class ResponseWriter implements HttpResponseWriter {
 
         // We just support Content-length for now.
         // TODO: this will need to be changed if we support transfer encodings.
-        Long bodyCount = mBufPool.remaining();
+        Long bodyCount = mBufBuilder.remaining();
         mHeadersBuilder.set(HeaderField.Entity.CONTENT_LENGTH, bodyCount.toString());
 
         // Configure the Connection header if we are closing the connection.
@@ -136,17 +136,17 @@ class ResponseWriter implements HttpResponseWriter {
             mHeadersBuilder.set(HeaderField.General.CONNECTION, HeaderToken.CLOSE);
         }
 
-        ByteBufferPool.Inserter inserter = mBufPool.insertFront();
+        ByteBufferArrayBuilder.Inserter inserter = mBufBuilder.insertFront();
         try {
             writeStatusHeaders(inserter, mStatus);
         } finally {
             inserter.close();
         }
 
-        long remCount = mBufPool.remaining();
+        long remCount = mBufBuilder.remaining();
         mSentCount = remCount;
 
-        ByteBuffer[] bufs = mBufPool.build();
+        ByteBuffer[] bufs = mBufBuilder.build();
         conn.send(mNbcSendCallback, bufs, remCount);
     }
 
@@ -174,13 +174,13 @@ class ResponseWriter implements HttpResponseWriter {
     public void write(ByteBuffer buf) {
         writeHeader(HttpStatus.OK);
 
-        mBufPool.writeBuffer(buf);
+        mBufBuilder.writeBuffer(buf);
     }
 
     public void write(String s) {
         writeHeader(HttpStatus.OK);
 
-        mBufPool.writeString(s);
+        mBufBuilder.writeString(s);
     }
 
     /**
@@ -205,7 +205,7 @@ class ResponseWriter implements HttpResponseWriter {
     /**
      * Writes the Status-Line and Headers in wire format to the inserter.
      */
-    private void writeStatusHeaders(ByteBufferPool.Inserter inserter, int statusCode) {
+    private void writeStatusHeaders(ByteBufferArrayBuilder.Inserter inserter, int statusCode) {
         String reason = sReasonMap.get(statusCode);
         if (reason == null) {
             reason = sUnknownReason;

@@ -94,12 +94,12 @@ public class HeadersTest extends Headers {
         builder.add("hello", "are");
         builder.add("hello", "you");
 
-        ByteBufferPool pool = new ByteBufferPool(4, false);
+        ByteBufferArrayBuilder pool = new ByteBufferArrayBuilder(4, false);
         pool.writeString("pizza!");
 
         assertEquals(6, pool.remaining());
 
-        ByteBufferPool.Inserter inserter = pool.insertBack();
+        ByteBufferArrayBuilder.Inserter inserter = pool.insertBack();
         try {
             builder.write(inserter);
         } finally {
@@ -145,7 +145,7 @@ public class HeadersTest extends Headers {
 
     @Test
     public void testWritePool() {
-        ByteBufferPool pool = new ByteBufferPool(4, false);
+        ByteBufferArrayBuilder pool = new ByteBufferArrayBuilder(4, false);
 
         HeadersBuilder builder = new HeadersBuilder();
         builder.add("hello", "world");

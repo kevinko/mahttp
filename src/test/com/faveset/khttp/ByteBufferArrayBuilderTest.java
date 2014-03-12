@@ -11,11 +11,11 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
-public class ByteBufferPoolTest {
+public class ByteBufferArrayBuilderTest {
     @Test
     public void testBuffers() {
         // Use heap buffers when testing so that Helper.compare will work.
-        ByteBufferPool pool = new ByteBufferPool(4, false);
+        ByteBufferArrayBuilder pool = new ByteBufferArrayBuilder(4, false);
         pool.writeString("hello");
 
         ByteBuffer buf = Helper.makeByteBuffer("foo");
@@ -41,7 +41,7 @@ public class ByteBufferPoolTest {
         pool.writeString("i am hungry!");
         assertEquals(12, pool.remaining());
 
-        ByteBufferPool.Inserter inserter = pool.insertFront();
+        ByteBufferArrayBuilder.Inserter inserter = pool.insertFront();
         buf = Helper.makeByteBuffer("foo");
         inserter.writeBuffer(buf);
         inserter.close();
@@ -89,7 +89,7 @@ public class ByteBufferPoolTest {
     @Test
     public void testStrings() {
         // Use heap buffers when testing so that Helper.compare will work.
-        ByteBufferPool pool = new ByteBufferPool(4, false);
+        ByteBufferArrayBuilder pool = new ByteBufferArrayBuilder(4, false);
         pool.writeString("hello");
         pool.writeString("world");
         // Now, write exactly at the boundaries.
@@ -113,7 +113,7 @@ public class ByteBufferPoolTest {
         pool.writeString("world.");
         assertEquals(10, pool.remaining());
 
-        ByteBufferPool.Inserter inserter = pool.insertFront();
+        ByteBufferArrayBuilder.Inserter inserter = pool.insertFront();
         inserter.writeString("Save save SAVE!");
         inserter.close();
         assertEquals(25, pool.remaining());

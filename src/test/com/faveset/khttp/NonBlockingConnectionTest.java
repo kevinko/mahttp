@@ -401,7 +401,7 @@ public class NonBlockingConnectionTest {
     public void testSendBuffers() throws IOException, InterruptedException {
         // Pick an number that is not divisible by a buffer size.
         final String expectedString = makeTestString(5001);
-        ByteBufferPool pool = new ByteBufferPool(16, true);
+        ByteBufferArrayBuilder pool = new ByteBufferArrayBuilder(16, true);
         pool.writeString(expectedString);
 
         final long remCount = pool.remaining();
