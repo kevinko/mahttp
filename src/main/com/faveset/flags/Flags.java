@@ -8,6 +8,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Example usage:
+ *   public class Foo {
+ *     private BoolFlag mFooFlag = Flags.registerBool("foo", true, "enable foo");
+ *
+ *     public static void main(String[] args) {
+ *       Flags.parse();
+ *       if (mFooFlag.get()) {
+ *         // ...
+ *       }
+ *     }
+ *   }
+ */
 public class Flags {
     // The singleton flags object.
     private static Flags sFlags;
