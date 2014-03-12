@@ -162,8 +162,11 @@ class HttpConnection {
         w.setHttpMinorVersion(minorVersion);
 
         if (minorVersion == 0) {
-            // HTTP/1.0 does not support persistent connections.
-            w.setCloseConnection(true);
+            // HTTP/1.0 does not support persistent connections, but we can
+            // check for HTTP/1.0 Keep-Alive support.
+            if (!values.contains(HeaderToken.KEEP_ALIVE)) {
+                w.setCloseConnection(true);
+            }
         }
     }
 

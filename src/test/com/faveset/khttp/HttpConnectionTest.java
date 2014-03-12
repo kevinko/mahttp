@@ -233,11 +233,23 @@ public class HttpConnectionTest {
                     OutputStream os = sock.getOutputStream();
                     PrintWriter w = new PrintWriter(os);
                     w.print("GET / HTTP/1.0\r\n");
+                    w.print("Connection:   Keep-Alive\r\n");
                     w.print("\r\n");
                     w.flush();
 
                     InputStream is = sock.getInputStream();
                     String line = Helper.readLine(is);
+                    assertEquals("HTTP/1.0 404, Not Found\r\n", line);
+                    line = Helper.readLine(is);
+                    assertEquals("Content-Length: 0\r\n", line);
+                    line = Helper.readLine(is);
+                    assertEquals("\r\n", line);
+
+                    w.print("GET / HTTP/1.0\r\n");
+                    w.print("\r\n");
+                    w.flush();
+
+                    line = Helper.readLine(is);
                     assertEquals("HTTP/1.0 404, Not Found\r\n", line);
 
                     checkEmptyConnectionClose(is);

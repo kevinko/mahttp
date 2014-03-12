@@ -8,4 +8,6 @@ package com.faveset.khttp;
 class HeaderToken {
     public static final String CHUNKED = "chunked";
     public static final String CLOSE = "close";
+    // This is for HTTP/1.0 compatibility.
+    public static final String KEEP_ALIVE = "Keep-Alive";
 }
