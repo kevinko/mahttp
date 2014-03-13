@@ -9,7 +9,7 @@ import java.util.Set;
 abstract class Pool<T> {
     // Used for generating unique tags for each entry's hashCode.
     // Since Java is a GCed language, we need not worry about wraparound.
-    // If a duplication occurs, the buffer Set will only hold one
+    // If a duplication occurs, the entry Set will only hold one
     // of the entries.  The other will be released and treated as a normal
     // reference, which will cause a negligible amount of GC churn.
     private int mTagCount;
@@ -22,7 +22,7 @@ abstract class Pool<T> {
     private Set<PoolEntry<T>> mFreeEntries;
 
     /**
-     * @param maxCount the maximum number of buffers to maintain before letting
+     * @param maxCount the maximum number of entries to maintain before letting
      * the GC take over.
      */
     protected Pool(int maxCount) {
@@ -51,7 +51,7 @@ abstract class Pool<T> {
     protected abstract T allocateValue();
 
     // Used for testing.
-    int getFreeBufferCount() {
+    int getFreeEntryCount() {
         return mFreeEntries.size();
     }
 

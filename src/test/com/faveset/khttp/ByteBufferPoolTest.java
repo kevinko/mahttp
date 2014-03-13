@@ -21,30 +21,30 @@ public class ByteBufferPoolTest {
         PoolEntry<ByteBuffer> entry1 = pool.allocate();
         assertTrue(entry1 != null);
         assertTrue(entry1.get() != null);
-        assertEquals(0, pool.getFreeBufferCount());
+        assertEquals(0, pool.getFreeEntryCount());
 
         PoolEntry<ByteBuffer> entry2 = pool.allocate();
         assertTrue(entry2 != null);
         assertTrue(entry2.get() != null);
-        assertEquals(0, pool.getFreeBufferCount());
+        assertEquals(0, pool.getFreeEntryCount());
 
         // Test below boundary when releasing.
         assertEquals(null, pool.release(entry1));
-        assertEquals(1, pool.getFreeBufferCount());
+        assertEquals(1, pool.getFreeEntryCount());
 
         assertEquals(entry1, pool.allocate());
-        assertEquals(0, pool.getFreeBufferCount());
+        assertEquals(0, pool.getFreeEntryCount());
 
         // Now test above boundary.
         PoolEntry<ByteBuffer> entry3 = pool.allocate();
         assertTrue(entry3 != null);
-        assertEquals(0, pool.getFreeBufferCount());
+        assertEquals(0, pool.getFreeEntryCount());
 
         assertEquals(null, pool.release(entry1));
-        assertEquals(1, pool.getFreeBufferCount());
+        assertEquals(1, pool.getFreeEntryCount());
         assertEquals(null, pool.release(entry2));
-        assertEquals(2, pool.getFreeBufferCount());
+        assertEquals(2, pool.getFreeEntryCount());
         assertEquals(null, pool.release(entry3));
-        assertEquals(2, pool.getFreeBufferCount());
+        assertEquals(2, pool.getFreeEntryCount());
     }
 }
