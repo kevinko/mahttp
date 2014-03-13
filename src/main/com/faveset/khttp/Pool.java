@@ -64,6 +64,10 @@ abstract class Pool<T> implements PoolInterface<T> {
      * @return null
      */
     public PoolEntry<T> release(PoolEntry<T> entry) {
+        if (entry == null) {
+            return null;
+        }
+
         if (mFreeEntries.size() < mMaxCount) {
             // Keep the entry so that we can reach the desired thresholds.
             mFreeEntries.add(entry);
