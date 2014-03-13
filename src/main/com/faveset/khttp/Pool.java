@@ -6,7 +6,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
-abstract class Pool<T> {
+abstract class Pool<T> implements PoolInterface<T> {
     // Used for generating unique tags for each entry's hashCode.
     // Since Java is a GCed language, we need not worry about wraparound.
     // If a duplication occurs, the entry Set will only hold one
