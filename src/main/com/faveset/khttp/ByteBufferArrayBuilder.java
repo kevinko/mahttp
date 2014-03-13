@@ -10,7 +10,7 @@ import java.util.ListIterator;
 
 /**
  * A ByteBufferArrayBuilder manages a collection of ByteBuffers by dynamically
- * allocating them during a series string and buffer writes.
+ * allocating them during a series of string and buffer writes.
  */
 class ByteBufferArrayBuilder {
     /**
