@@ -18,14 +18,14 @@ public class ByteBufferPoolTest {
     public void test() {
         ByteBufferPool pool = new ByteBufferPool(1024, false, 2);
 
-        ByteBufferPool.Entry entry1 = pool.allocate();
+        PoolEntry<ByteBuffer> entry1 = pool.allocate();
         assertTrue(entry1 != null);
-        assertTrue(entry1.getByteBuffer() != null);
+        assertTrue(entry1.get() != null);
         assertEquals(0, pool.getFreeBufferCount());
 
-        ByteBufferPool.Entry entry2 = pool.allocate();
+        PoolEntry<ByteBuffer> entry2 = pool.allocate();
         assertTrue(entry2 != null);
-        assertTrue(entry2.getByteBuffer() != null);
+        assertTrue(entry2.get() != null);
         assertEquals(0, pool.getFreeBufferCount());
 
         // Test below boundary when releasing.
@@ -36,7 +36,7 @@ public class ByteBufferPoolTest {
         assertEquals(0, pool.getFreeBufferCount());
 
         // Now test above boundary.
-        ByteBufferPool.Entry entry3 = pool.allocate();
+        PoolEntry<ByteBuffer> entry3 = pool.allocate();
         assertTrue(entry3 != null);
         assertEquals(0, pool.getFreeBufferCount());
 
