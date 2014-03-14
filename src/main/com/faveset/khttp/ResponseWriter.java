@@ -58,7 +58,7 @@ class ResponseWriter implements HttpResponseWriter {
         mHeadersBuilder = new HeadersBuilder();
 
         // Use direct allocations.
-        mBufBuilder = new ByteBufferArrayBuilder(sBufferSize, true);
+        mBufBuilder = new ByteBufferArrayBuilder(sBufferSize, Constants.USE_DIRECT_BUFFERS);
 
         mNbcSendCallback = new NonBlockingConnection.OnSendCallback() {
             public void onSend(NonBlockingConnection conn) {

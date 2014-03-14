@@ -68,8 +68,11 @@ class HttpConnection {
 
     private static final String sTag = HttpConnection.class.toString();
 
-    /* Size for the internal buffers. */
-    public static final int BUFFER_SIZE = 4096;
+    // Creates direct ByteBuffers with size
+    // Constants.NON_BLOCKING_CONNECTION_BUFFER_SIZE.
+    private static ByteBufferPool sByteBufferPool =
+        new ByteBufferPool(Constants.NON_BLOCKING_CONNECTION_BUFFER_SIZE,
+                true, Constants.HTTP_CONNECTION_BUFFER_POOL_SIZE);
 
     private static final EnumMap<State, StateEntry> mStateHandlerMap;
 
@@ -136,7 +139,7 @@ class HttpConnection {
      * by callers.
      */
     public HttpConnection(Selector selector, SocketChannel chan) throws IOException {
-        mConn = new NonBlockingConnection(selector, chan, BUFFER_SIZE);
+        mConn = new NonBlockingConnection(selector, chan, sByteBufferPool);
 
         mHandlerState = new HandlerState().setOnRequestCallback(mRequestCallback);
         mState = State.REQUEST_START;

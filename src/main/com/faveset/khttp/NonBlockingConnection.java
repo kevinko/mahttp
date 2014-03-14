@@ -50,6 +50,11 @@ class NonBlockingConnection {
     private SocketChannel mChan;
     private SelectionKey mKey;
 
+    private PoolInterface<ByteBuffer> mPool;
+
+    private PoolEntry<ByteBuffer> mInBufferEntry;
+    private PoolEntry<ByteBuffer> mOutBufferInternalEntry;
+
     private ByteBuffer mInBuffer;
 
     // This can point to an external or internal buffer.  It is configured
@@ -80,6 +85,25 @@ class NonBlockingConnection {
     private SendType mSendType;
 
     /**
+     * @param inBuf the internal input ByteBuffer to use.
+     * @param outBuf the internal output ByteBuffer to use.
+     *
+     * @throws IOException
+     */
+    private NonBlockingConnection(Selector selector, SocketChannel chan,
+            ByteBuffer inBuf, ByteBuffer outBuf) throws IOException {
+        chan.configureBlocking(false);
+        mChan = chan;
+        mKey = mChan.register(selector, 0);
+        mKey.attach(mSelectorHandler);
+
+        mInBuffer = inBuf;
+        mOutBufferInternal = outBuf;
+
+        mSendType = SendType.INTERNAL;
+    }
+
+    /**
      * The NonBlockingConnection manages registration of Selector interest.
      * A SelectorHandler will be attached to all Selector keys.
      *
@@ -88,15 +112,23 @@ class NonBlockingConnection {
      * @throws IOException on I/O error.
      */
     public NonBlockingConnection(Selector selector, SocketChannel chan, int bufferSize) throws IOException {
-        chan.configureBlocking(false);
-        mChan = chan;
-        mKey = mChan.register(selector, 0);
-        mKey.attach(mSelectorHandler);
+        this(selector, chan,
+                ByteBuffer.allocateDirect(bufferSize),
+                ByteBuffer.allocateDirect(bufferSize));
+    }
 
-        mInBuffer = ByteBuffer.allocateDirect(bufferSize);
-        mOutBufferInternal = ByteBuffer.allocateDirect(bufferSize);
+    /**
+     * This variant uses the pool for allocation.
+     */
+    public NonBlockingConnection(Selector selector, SocketChannel chan,
+            PoolInterface<ByteBuffer> pool) throws IOException {
+        this(selector, chan, null, null);
 
-        mSendType = SendType.INTERNAL;
+        mPool = pool;
+        mInBufferEntry = pool.allocate();
+        mInBuffer = mInBufferEntry.get();
+        mOutBufferInternalEntry = pool.allocate();
+        mOutBufferInternal = mOutBufferInternalEntry.get();
     }
 
     /**
@@ -147,6 +179,13 @@ class NonBlockingConnection {
     public void close() throws IOException {
         mChan.close();
         mKey.cancel();
+
+        if (mPool != null) {
+            mInBufferEntry = mPool.release(mInBufferEntry);
+            mInBuffer = null;
+            mOutBufferInternalEntry = mPool.release(mOutBufferInternalEntry);
+            mOutBufferInternal = null;
+        }
     }
 
     public ByteBuffer getInBuffer() {
