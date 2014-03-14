@@ -218,6 +218,16 @@ class NonBlockingConnection {
      * callbacks.
      */
     private void handleRead() throws IOException {
+        // Callbacks are triggered after every non-empty read.  Thus,
+        // it's safe to clear the buffer here for new data (rather than after
+        // the callback).
+        //
+        // In the common case, mInBuffer will not be cleared prior to this call,
+        // so it will not be wasted.
+        //
+        // Exceptions include the two len cases below the read, which are rare.
+        mInBuffer.clear();
+
         int len = mChan.read(mInBuffer);
         if (len == -1) {
             // Remote triggered EOF.  Bubble up to the user for handling.
@@ -249,8 +259,8 @@ class NonBlockingConnection {
             callback.onRecv(this, mInBuffer);
         }
 
-        // Ready for further reads if this is persistent.
-        mInBuffer.clear();
+        // NOTE: we must be careful at this point, because the connection might
+        // be closed as a result of the callback.  Thus, return immediately.
     }
 
     /**
@@ -378,9 +388,6 @@ class NonBlockingConnection {
 
         mOnRecvCallback = callback;
         mIsRecvPersistent = isPersistent;
-
-        // Prepare the in buffer for receiving.
-        mInBuffer.clear();
     }
 
     /**
@@ -456,6 +463,15 @@ class NonBlockingConnection {
         mExternalOutBuffersRemaining = bufsRemaining;
 
         registerSendCallback(callback);
+
+        // To minimize latency, try sending immediately.
+        try {
+            handleWrite();
+        } catch (IOException e) {
+            if (mOnErrorCallback != null) {
+                mOnErrorCallback.onError(this, e.toString());
+            }
+        }
     }
 
     /**
@@ -481,6 +497,15 @@ class NonBlockingConnection {
         }
 
         registerSendCallback(callback);
+
+        // To minimize latency, try sending immediately.
+        try {
+            handleWrite();
+        } catch (IOException e) {
+            if (mOnErrorCallback != null) {
+                mOnErrorCallback.onError(this, e.toString());
+            }
+        }
     }
 
     /**
