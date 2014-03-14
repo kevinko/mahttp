@@ -108,6 +108,8 @@ public class HttpServer {
     }
 
     private void handleConnectionClose(HttpConnection conn) {
+        // The HttpServer is at the top of the chain.  Thus, we start
+        // closing for real.
         try {
             conn.close();
         } catch (IOException e) {

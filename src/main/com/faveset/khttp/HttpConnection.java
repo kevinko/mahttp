@@ -17,7 +17,13 @@ import java.util.Set;
 import com.faveset.log.Log;
 import com.faveset.log.NullLog;
 
-// Handles an HTTP request in non-blocking fashion.
+/**
+ * Handles an HTTP request in non-blocking fashion.
+ *
+ * This follows the protocol outlined in NonBlockingConnection for handling
+ * closes: bubble up to the higher level via OnCloseCallback and expect the
+ * upper level to eventually call HttpConnection's close().
+ */
 class HttpConnection {
     /**
      * Called when the HttpConnection is closed.  The caller should call
@@ -200,16 +206,10 @@ class HttpConnection {
     }
 
     /**
-     * Handle read closes.
+     * Handle read closes.  This adheres to our protocol described at the
+     * top of the file.
      */
     private void handleClose(NonBlockingConnection conn) {
-        try {
-            conn.close();
-        } catch (IOException e) {
-            // Just warn and continue clean-up.
-            mLog.e(sTag, "failed to close connection during shutdown", e);
-        }
-
         if (mOnCloseCallback != null) {
             mOnCloseCallback.onClose(this);
         }

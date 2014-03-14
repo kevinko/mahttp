@@ -8,6 +8,13 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 
+/**
+ * We follow a standard protocol for handling connection closes:
+ *
+ *   - When a close is detected, we notify the user of the NonBlockingConnection
+ *   via the OnCloseCallback.  We then expect the user to call close() when
+ *   ready.
+ */
 class NonBlockingConnection {
     /**
      * Called when the connection is closed by the peer.  The callback should
@@ -213,7 +220,7 @@ class NonBlockingConnection {
     private void handleRead() throws IOException {
         int len = mChan.read(mInBuffer);
         if (len == -1) {
-            // Remote triggered EOF.
+            // Remote triggered EOF.  Bubble up to the user for handling.
             if (mOnCloseCallback != null) {
                 mOnCloseCallback.onClose(this);
             }
