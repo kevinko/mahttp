@@ -17,6 +17,8 @@ import java.util.Set;
 import com.faveset.log.Log;
 import com.faveset.log.NullLog;
 
+// TODO: what happens on error.  Does the connection close?
+
 /**
  * Handles an HTTP request in non-blocking fashion.
  *
@@ -82,10 +84,17 @@ class HttpConnection {
 
     private static final EnumMap<State, StateEntry> mStateHandlerMap;
 
-    private Log mLog = new NullLog();
+    // Formats Date strings in RFC 1123 format.
+    private static ThreadLocal<SimpleDateFormat> sHttpDateFormatter =
+        new ThreadLocal<SimpleDateFormat>() {
+            @Override
+            protected SimpleDateFormat initialValue() {
+                return new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
+            }
+        };
 
     // Formats Date strings in common log format.
-    private ThreadLocal<SimpleDateFormat> mLogDateFormatter =
+    private static ThreadLocal<SimpleDateFormat> sLogDateFormatter =
         new ThreadLocal<SimpleDateFormat>() {
             @Override
             protected SimpleDateFormat initialValue() {
@@ -93,6 +102,12 @@ class HttpConnection {
                 return new SimpleDateFormat("dd/MMM/yyyy:HH:mm:ss Z");
             }
         };
+
+    // Static date object to minimize date allocations.
+    // TODO: this is not threadsafe.
+    private static Date sDate = new Date();
+
+    private Log mLog = new NullLog();
 
     private Map<String, HttpHandler> mHttpHandlerMap;
 
@@ -194,8 +209,8 @@ class HttpConnection {
      * zone = (`+' | `-') 4*digit
      */
     private String getLogTime() {
-        Date now = new Date();
-        return mLogDateFormatter.get().format(now);
+        sDate.setTime(System.currentTimeMillis());
+        return sLogDateFormatter.get().format(sDate);
     }
 
     /**
@@ -229,8 +244,13 @@ class HttpConnection {
     }
 
     private boolean handleRequest(HttpRequest req, ByteBuffer data, ResponseWriter w) {
-        // Prepare the writer.
+        // Prepare the writer at a general level, for both errors and successes.
         configureWriter(req, w);
+
+        // By default, the response takes the current date.
+        sDate.setTime(System.currentTimeMillis());
+        w.getHeadersBuilder().set(HeaderField.General.DATE,
+                sHttpDateFormatter.get().format(sDate));
 
         String uri = req.getUri();
         HttpHandler handler = mHttpHandlerMap.get(uri);

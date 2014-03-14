@@ -15,9 +15,11 @@ import java.net.Socket;
 import java.nio.channels.Selector;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.text.SimpleDateFormat;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,6 +31,9 @@ import com.faveset.log.NullLog;
 @RunWith(JUnit4.class)
 public class HttpConnectionTest {
     private static final int sListenPort = 8123;
+
+    private static SimpleDateFormat sHttpDateFormat =
+        new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
 
     private abstract class Tester {
         private Helper.ServerThread.Task mServerTask;
@@ -150,6 +155,54 @@ public class HttpConnectionTest {
         }
     }
 
+    private static class ExpectedDateHeader extends ExpectedHeader {
+        private Date mDate;
+
+        public ExpectedDateHeader(Date date) {
+            super("Date", null);
+            mDate = date;
+        }
+
+        /**
+         * We handle date header values by expecting +/- a second from the
+         * given time.
+         */
+        @Override
+        public boolean match(String s) {
+            String[] keyValue = parseKeyValue(s);
+            if (keyValue == null) {
+                return false;
+            }
+
+            String key = keyValue[0];
+            String value = keyValue[1];
+
+            if (!getKey().equals(key)) {
+                return false;
+            }
+
+            // +/- one second.
+            Date prevDate = new Date(mDate.getTime() - 1000);
+            Date nextDate = new Date(mDate.getTime() + 1000);
+
+            Date[] dates = new Date[]{prevDate, mDate, nextDate};
+            boolean success = false;
+            for (int ii = 0; ii < dates.length; ii++) {
+                String dateStr = sHttpDateFormat.format(dates[ii]);
+                if (dateStr.equals(value)) {
+                    success = true;
+                    break;
+                }
+            }
+            if (!success) {
+                return false;
+            }
+
+            // Check for a trailing CR-LF.
+            return (s.endsWith("\n") || s.endsWith("\r\n"));
+        }
+    }
+
     private static void checkHeaders(InputStream is,
             ExpectedHeader[] expectedHeaders) throws IOException {
         Map<String, ExpectedHeader> expectMap = new HashMap<String, ExpectedHeader>(expectedHeaders.length);
@@ -162,6 +215,7 @@ public class HttpConnectionTest {
         do {
             String line = Helper.readLine(is);
             String[] keyValue = ExpectedHeader.parseKeyValue(line);
+            assertTrue(keyValue != null);
 
             ExpectedHeader h = expectMap.get(keyValue[0]);
             assertTrue(h != null);
@@ -174,6 +228,13 @@ public class HttpConnectionTest {
         } while (count < expectMap.size());
     }
 
+    private void checkEmpty(InputStream is) throws IOException {
+        checkHeaders(is, new ExpectedHeader[]{
+            new ExpectedHeader("Content-Length", "0"),
+            new ExpectedDateHeader(new Date()),
+        });
+    }
+
     /**
      * Checks for Connection close and Content-length 0 headers.
      * Loops until the headers are found.
@@ -182,6 +243,7 @@ public class HttpConnectionTest {
         checkHeaders(is, new ExpectedHeader[]{
             new ExpectedHeader("Connection", "close"),
             new ExpectedHeader("Content-Length", "0"),
+            new ExpectedDateHeader(new Date()),
         });
     }
 
@@ -223,8 +285,7 @@ public class HttpConnectionTest {
                     InputStream is = sock.getInputStream();
                     String line = Helper.readLine(is);
                     assertEquals("HTTP/1.1 404, Not Found\r\n", line);
-                    line = Helper.readLine(is);
-                    assertEquals("Content-Length: 0\r\n", line);
+                    checkEmpty(is);
                     line = Helper.readLine(is);
                     assertEquals("\r\n", line);
 
@@ -236,10 +297,7 @@ public class HttpConnectionTest {
 
                     line = Helper.readLine(is);
                     assertEquals("HTTP/1.1 404, Not Found\r\n", line);
-
-                    line = Helper.readLine(is);
-                    assertEquals("Content-Length: 0\r\n", line);
-
+                    checkEmpty(is);
                     line = Helper.readLine(is);
                     assertEquals("\r\n", line);
 
@@ -253,8 +311,7 @@ public class HttpConnectionTest {
 
                     line = Helper.readLine(is);
                     assertEquals("HTTP/1.1 404, Not Found\r\n", line);
-                    line = Helper.readLine(is);
-                    assertEquals("Content-Length: 0\r\n", line);
+                    checkEmpty(is);
                     line = Helper.readLine(is);
                     assertEquals("\r\n", line);
 
@@ -320,6 +377,7 @@ public class HttpConnectionTest {
                     checkHeaders(is, new ExpectedHeader[]{
                         new ExpectedHeader("Content-Length", "0"),
                         new ExpectedHeader("Connection", "Keep-Alive"),
+                        new ExpectedDateHeader(new Date()),
                     });
                     line = Helper.readLine(is);
                     assertEquals("\r\n", line);
