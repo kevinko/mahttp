@@ -84,7 +84,7 @@ class DateFormatter {
         long secsNow = (timeMillis / 1000);
         if (secsNow == mLastSecs) {
             // The cached values are correct.
-            return;
+            return this;
         }
 
         // Otherwise, update the cached values.
