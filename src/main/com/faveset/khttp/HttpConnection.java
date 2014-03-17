@@ -84,28 +84,8 @@ class HttpConnection {
 
     private static final EnumMap<State, StateEntry> mStateHandlerMap;
 
-    // Formats Date strings in RFC 1123 format.
-    private static ThreadLocal<SimpleDateFormat> sHttpDateFormatter =
-        new ThreadLocal<SimpleDateFormat>() {
-            @Override
-            protected SimpleDateFormat initialValue() {
-                return new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
-            }
-        };
-
-    // Formats Date strings in common log format.
-    private static ThreadLocal<SimpleDateFormat> sLogDateFormatter =
-        new ThreadLocal<SimpleDateFormat>() {
-            @Override
-            protected SimpleDateFormat initialValue() {
-                // See getLogTime() for time format.
-                return new SimpleDateFormat("dd/MMM/yyyy:HH:mm:ss Z");
-            }
-        };
-
-    // Static date object to minimize date allocations.
-    // TODO: this is not threadsafe.
-    private static Date sDate = new Date();
+    // NOTE: this is not thread-safe.
+    private static DateFormatter sDateFormatter = new DateFormatter();
 
     private Log mLog = new NullLog();
 
@@ -197,23 +177,6 @@ class HttpConnection {
     }
 
     /**
-     * @return the current time in common log format
-     *
-     * [day/month/year:hour:minute:second zone]
-     * day = 2*digit
-     * month = 3*letter
-     * year = 4*digit
-     * hour = 2*digit
-     * minute = 2*digit
-     * second = 2*digit
-     * zone = (`+' | `-') 4*digit
-     */
-    private String getLogTime() {
-        sDate.setTime(System.currentTimeMillis());
-        return sLogDateFormatter.get().format(sDate);
-    }
-
-    /**
      * @return the underlying NonBlockingConnection.
      */
     public NonBlockingConnection getNonBlockingConnection() {
@@ -248,9 +211,9 @@ class HttpConnection {
         configureWriter(req, w);
 
         // By default, the response takes the current date.
-        sDate.setTime(System.currentTimeMillis());
+        sDateFormatter.update();
         w.getHeadersBuilder().set(HeaderField.General.DATE,
-                sHttpDateFormatter.get().format(sDate));
+                sDateFormatter.getRFC1123String());
 
         String uri = req.getUri();
         HttpHandler handler = mHttpHandlerMap.get(uri);
@@ -359,8 +322,10 @@ class HttpConnection {
             reqStr = "";
         }
 
+        sDateFormatter.update();
+        String logTime = sDateFormatter.getClfString();
         String s = String.format("%s - - [%s] \"%s\" %d %d",
-                remoteAddrStr, getLogTime(), reqStr, httpStatus, responseLen);
+                remoteAddrStr, logTime, reqStr, httpStatus, responseLen);
 
         mLog.i(sTag, s);
     }
