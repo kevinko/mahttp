@@ -388,6 +388,15 @@ class NonBlockingConnection {
 
         mOnRecvCallback = callback;
         mIsRecvPersistent = isPersistent;
+
+        // To minimize latency, try receiving immediately.
+        try {
+            handleRead();
+        } catch (IOException e) {
+            if (mOnErrorCallback != null) {
+                mOnErrorCallback.onError(this, e.toString());
+            }
+        }
     }
 
     /**
