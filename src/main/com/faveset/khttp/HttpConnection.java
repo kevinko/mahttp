@@ -8,8 +8,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
