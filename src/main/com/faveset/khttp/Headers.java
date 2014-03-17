@@ -26,7 +26,7 @@ public class Headers {
     private static final String sHeaderValueDelim = ",";
     private static final byte sHeaderValueDelimByte = (byte) ',';
 
-    protected HashMap<String, List<String>> mHeaders;
+    protected Map<String, List<String>> mHeaders;
 
     public Headers() {
         mHeaders = new HashMap<String, List<String>>();
