@@ -69,8 +69,7 @@ class DateFormatter {
      * @return this for chaining
      */
     public DateFormatter update() {
-        update(System.currentTimeMillis());
-        return this;
+        return update(System.currentTimeMillis());
     }
 
     /**
