@@ -44,10 +44,9 @@ public class HttpRequest {
 
     protected String mUri;
 
-    protected Headers mHeaders;
-
     protected int mMinorVersion;
 
+    private Headers mHeaders;
     private BodyType mBodyType;
     private OnBodyCopyCallback mOnBodyCopyCallback;
     private OnBodyReadCallback mOnBodyReadCallback;
