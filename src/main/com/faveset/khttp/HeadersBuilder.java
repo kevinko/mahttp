@@ -10,10 +10,6 @@ public class HeadersBuilder extends Headers {
         super();
     }
 
-    public HeadersBuilder(Headers headers) {
-        mHeaders = headers.mHeaders;
-    }
-
     /**
      * Adds the mapping (key, value), and appends to any existing values
      * if applicable.
