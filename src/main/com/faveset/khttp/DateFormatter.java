@@ -65,17 +65,22 @@ class DateFormatter {
 
     /**
      * Updates the internal time using the current time.
+     *
+     * @return this for chaining
      */
-    public void update() {
+    public DateFormatter update() {
         update(System.currentTimeMillis());
+        return this;
     }
 
     /**
      * Updates the internal time using the given time in millis since the epoch.
      *
      * @param timeMillis time in milliseconds.
+     *
+     * @return this for chaining
      */
-    public void update(long timeMillis) {
+    public DateFormatter update(long timeMillis) {
         long secsNow = (timeMillis / 1000);
         if (secsNow == mLastSecs) {
             // The cached values are correct.
@@ -88,5 +93,7 @@ class DateFormatter {
 
         mClfCache = mClfFormat.format(mLastDate);
         mRfcCache = mRFC1123Format.format(mLastDate);
+
+        return this;
     }
 }
