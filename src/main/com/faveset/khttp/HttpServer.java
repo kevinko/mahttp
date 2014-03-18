@@ -102,9 +102,14 @@ public class HttpServer {
         conn.setOnCloseCallback(mCloseCallback);
         conn.setLog(mLog);
 
+        // We must update mConnectionSet before starting, since conn.start()
+        // might issue a sequence of callbacks immediately.
+        mConnectionSet.add(conn);
+
         conn.start(mHttpHandlerMap);
 
-        mConnectionSet.add(conn);
+        // NOTE: The connection might close as a result of start(), so we
+        // must be careful when modifying after this point.
     }
 
     private void handleConnectionClose(HttpConnection conn) {
