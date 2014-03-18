@@ -33,6 +33,7 @@ public class HttpServer {
     private Selector mSelector;
 
     private SelectorHandler mListenSelectorHandler = new SelectorHandler() {
+            @Override
             public void onReady(SelectionKey key) {
                 if (key.isValid() && key.isAcceptable()) {
                     handleAccept(key.channel());
@@ -43,6 +44,7 @@ public class HttpServer {
     private Set<HttpConnection> mConnectionSet = new HashSet<HttpConnection>();
 
     private HttpConnection.OnCloseCallback mCloseCallback = new HttpConnection.OnCloseCallback() {
+        @Override
         public void onClose(HttpConnection conn) {
             handleConnectionClose(conn);
         }
