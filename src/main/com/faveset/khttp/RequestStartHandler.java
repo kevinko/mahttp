@@ -14,6 +14,7 @@ class RequestStartHandler implements StateHandler {
      * @return true if enough data existed in the buffer to parse a request
      * line.
      */
+    @Override
     public boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
         // The spec allows for leading CRLFs.
         Strings.skipCrlf(buf);

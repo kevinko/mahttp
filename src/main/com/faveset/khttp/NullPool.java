@@ -8,6 +8,7 @@ package com.faveset.khttp;
 abstract class NullPool<T> implements PoolInterface<T> {
     private int mTagCount;
 
+    @Override
     public PoolEntry<T> allocate() {
         return new PoolEntry<T>(mTagCount++, allocateValue());
     }
@@ -17,6 +18,7 @@ abstract class NullPool<T> implements PoolInterface<T> {
      */
     protected abstract T allocateValue();
 
+    @Override
     public PoolEntry<T> release(PoolEntry<T> entry) {
         return null;
     }

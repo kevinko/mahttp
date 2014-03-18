@@ -9,7 +9,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -95,6 +94,7 @@ public class Headers {
     /**
      * @return the header map as a string in wire format.
      */
+    @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
         write(builder);

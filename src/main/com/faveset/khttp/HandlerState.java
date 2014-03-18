@@ -3,7 +3,6 @@
 package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 /**
  * HandlerState tracks per-connection state for an HttpConnection's handlers.

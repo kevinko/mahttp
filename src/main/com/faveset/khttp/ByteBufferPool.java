@@ -4,10 +4,6 @@ package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
 
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Set;
-
 class ByteBufferPool extends Pool<ByteBuffer> {
     private static final int sDefaultMaxCount = 128;
 

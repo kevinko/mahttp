@@ -40,6 +40,7 @@ class RequestHeaderHandler implements StateHandler {
      *
      * @throws InvalidRequestException on bad request.
      */
+    @Override
     public boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
         HttpRequestBuilder req = state.getRequestBuilder();
 

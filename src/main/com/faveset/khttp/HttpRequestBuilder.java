@@ -2,10 +2,6 @@
 
 package com.faveset.khttp;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-
 class HttpRequestBuilder extends HttpRequest {
     private HeadersBuilder mHeadersBuilder;
 
@@ -16,6 +12,7 @@ class HttpRequestBuilder extends HttpRequest {
         init(mHeadersBuilder);
     }
 
+    @Override
     public void clear() {
         super.clear();
 

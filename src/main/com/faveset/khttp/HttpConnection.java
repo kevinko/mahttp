@@ -99,6 +99,7 @@ class HttpConnection {
 
     private NonBlockingConnection.OnCloseCallback mNbcCloseCallback =
         new NonBlockingConnection.OnCloseCallback() {
+            @Override
             public void onClose(NonBlockingConnection conn) {
                 handleClose(conn);
             }
@@ -106,6 +107,7 @@ class HttpConnection {
 
     private NonBlockingConnection.OnErrorCallback mNbcErrorCallback =
         new NonBlockingConnection.OnErrorCallback() {
+            @Override
             public void onError(NonBlockingConnection conn, String reason) {
                 handleError(conn, reason);
             }
@@ -113,6 +115,7 @@ class HttpConnection {
 
     private NonBlockingConnection.OnRecvCallback mNbcRecvCallback =
         new NonBlockingConnection.OnRecvCallback() {
+            @Override
             public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
                 handleRecv(conn, buf);
             }
@@ -120,6 +123,7 @@ class HttpConnection {
 
     private HandlerState.OnRequestCallback mRequestCallback =
         new HandlerState.OnRequestCallback() {
+            @Override
             public boolean onRequest(HttpRequest req, ByteBuffer data, ResponseWriter w) {
                 return handleRequest(req, data, w);
             }
@@ -127,6 +131,7 @@ class HttpConnection {
 
     private ResponseWriter.OnSendCallback mSendResponseCallback =
         new ResponseWriter.OnSendCallback() {
+            @Override
             public void onSend() {
                 handleSendResponse();
             }

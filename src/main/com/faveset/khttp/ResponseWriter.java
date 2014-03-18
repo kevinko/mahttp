@@ -2,12 +2,9 @@
 
 package com.faveset.khttp;
 
-import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 // TODO:
@@ -61,6 +58,7 @@ class ResponseWriter implements HttpResponseWriter {
         mBufBuilder = new ByteBufferArrayBuilder(sBufferSize, Constants.USE_DIRECT_BUFFERS);
 
         mNbcSendCallback = new NonBlockingConnection.OnSendCallback() {
+            @Override
             public void onSend(NonBlockingConnection conn) {
                 mSendCallback.onSend();
             }
@@ -90,6 +88,7 @@ class ResponseWriter implements HttpResponseWriter {
      * NOTE: the Connection header will not take effect.
      * Use setCloseConnection() instead.
      */
+    @Override
     public HeadersBuilder getHeadersBuilder() {
         return mHeadersBuilder;
     }
@@ -150,6 +149,7 @@ class ResponseWriter implements HttpResponseWriter {
         conn.send(mNbcSendCallback, bufs, remCount);
     }
 
+    @Override
     public void setCloseConnection(boolean close) {
         mCloseConnection = close;
     }
@@ -171,12 +171,14 @@ class ResponseWriter implements HttpResponseWriter {
      * This will implicitly call writeHeader with status OK if not already
      * performed by the caller.
      */
+    @Override
     public void write(ByteBuffer buf) {
         writeHeader(HttpStatus.OK);
 
         mBufBuilder.writeBuffer(buf);
     }
 
+    @Override
     public void write(String s) {
         writeHeader(HttpStatus.OK);
 
@@ -193,6 +195,7 @@ class ResponseWriter implements HttpResponseWriter {
      *
      * Only the first call to this will take precedence.
      */
+    @Override
     public void writeHeader(int statusCode) {
         if (mWroteHeaders) {
             return;

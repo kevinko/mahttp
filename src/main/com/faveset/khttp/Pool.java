@@ -31,6 +31,7 @@ abstract class Pool<T> implements PoolInterface<T> {
         mFreeEntries = new HashSet<PoolEntry<T>>(mMaxCount);
     }
 
+    @Override
     public PoolEntry<T> allocate() {
         PoolEntry<T> entry;
         if (mFreeEntries.size() == 0) {
@@ -63,6 +64,7 @@ abstract class Pool<T> implements PoolInterface<T> {
      *
      * @return null
      */
+    @Override
     public PoolEntry<T> release(PoolEntry<T> entry) {
         if (entry == null) {
             return null;

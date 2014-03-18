@@ -4,8 +4,6 @@ package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
 
-import java.util.Map;
-
 public interface HttpResponseWriter {
     /**
      * NOTE: the Connection header will not take effect.

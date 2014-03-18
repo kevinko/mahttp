@@ -82,6 +82,7 @@ class NonBlockingConnection {
     private OnSendCallback mOnSendCallback;
 
     private SelectorHandler mSelectorHandler = new SelectorHandler() {
+        @Override
         public void onReady(SelectionKey key) {
             onSelect();
         }
