@@ -162,10 +162,14 @@ class NonBlockingConnection {
     /**
      * Cancels the send handler and write interest on the selection key.
      * The send type will be reset to INTERNAL.
+     *
+     * @return the cancelled callback, which will be null if not assigned.
      */
-    private void cancelSend() {
+    private OnSendCallback cancelSend() {
+        OnSendCallback result = mOnSendCallback;
+
         if (mOnSendCallback == null) {
-            return;
+            return result;
         }
 
         mOnSendCallback = null;
@@ -175,6 +179,9 @@ class NonBlockingConnection {
 
         mSendType = SendType.INTERNAL;
         mOutBuffer = null;
+        mExternalOutBuffers = null;
+
+        return result;
     }
 
     /**
@@ -185,7 +192,15 @@ class NonBlockingConnection {
      */
     public void close() throws IOException {
         mChan.close();
+
+        // Unregister handlers to avoid reference loops.
+        mKey.attach(null);
+
         mKey.cancel();
+
+        // Clean up all possible external references.
+        mExternalOutBuffers = null;
+        mOutBuffer = null;
 
         if (mPool != null) {
             mInBufferEntry = mPool.release(mInBufferEntry);
@@ -193,6 +208,12 @@ class NonBlockingConnection {
             mOutBufferInternalEntry = mPool.release(mOutBufferInternalEntry);
             mOutBufferInternal = null;
         }
+
+        // Unregister callbacks to avoid reference cycles.
+        mOnCloseCallback = null;
+        mOnErrorCallback = null;
+        mOnRecvCallback = null;
+        mOnSendCallback = null;
     }
 
     public ByteBuffer getInBuffer() {
@@ -289,6 +310,9 @@ class NonBlockingConnection {
                 callback.onSend(this);
             }
 
+            // NOTE: the callback might close the connection as a result of
+            // the callback.
+
             return;
         }
 
@@ -311,6 +335,8 @@ class NonBlockingConnection {
                 if (callback != null) {
                     callback.onSend(this);
                 }
+
+                // NOTE: the callback might close the connection.
             }
 
             // Otherwise, the selector is still waiting for send opportunities.
@@ -327,6 +353,8 @@ class NonBlockingConnection {
         if (callback != null) {
             callback.onSend(this);
         }
+
+        // NOTE: the callback might close the connection.
     }
 
     /**
