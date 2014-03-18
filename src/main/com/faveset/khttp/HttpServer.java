@@ -28,6 +28,9 @@ public class HttpServer {
     private Map<String, HttpHandler> mHttpHandlerMap = new HashMap<String, HttpHandler>();
 
     private ServerSocketChannel mListenChan;
+
+    private SelectionKey mListenKey;
+
     // A SelectorHandler will be attached to each SelectionKey registered
     // with the Selector.
     private Selector mSelector;
@@ -55,7 +58,11 @@ public class HttpServer {
     public HttpServer() {}
 
     public void close() throws IOException {
+        // This also cancels the key.
         mListenChan.close();
+
+        // Unregister handlers to avoid reference loops.
+        mListenKey.attach(null);
 
         for (HttpConnection conn : mConnectionSet) {
             conn.close();
@@ -116,7 +123,7 @@ public class HttpServer {
 
     private void handleConnectionClose(HttpConnection conn) {
         // The HttpServer is at the top of the chain.  Thus, we start
-        // closing for real.
+        // closing for real after cleaning up.
         try {
             conn.close();
         } catch (IOException e) {
@@ -142,7 +149,7 @@ public class HttpServer {
         sock.bind(sa);
 
         mSelector = Selector.open();
-        SelectionKey listenKey = mListenChan.register(mSelector, SelectionKey.OP_ACCEPT, mListenSelectorHandler);
+        mListenKey = mListenChan.register(mSelector, SelectionKey.OP_ACCEPT, mListenSelectorHandler);
 
         mIsDone = false;
 
