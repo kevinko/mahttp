@@ -192,12 +192,11 @@ class NonBlockingConnection {
      * @throws IOException if the underlying socket experienced an I/O error.
      */
     public void close() throws IOException {
+        // This also cancels the key.
         mChan.close();
 
         // Unregister handlers to avoid reference loops.
         mKey.attach(null);
-
-        mKey.cancel();
 
         // Clean up all possible external references.
         mExternalOutBuffers = null;
