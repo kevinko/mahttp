@@ -384,7 +384,9 @@ class HttpConnection {
     }
 
     /**
-     * Start HttpConnection processing.
+     * Start HttpConnection processing.  Processing may occur immediately;
+     * thus, one must assume that any callback, including the OnCloseCallback,
+     * may be called during this method.
      *
      * @param handlers maps uris to HttpHandlers for handling requests.
      */
