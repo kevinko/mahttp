@@ -125,7 +125,7 @@ class NonBlockingConnection {
     }
 
     /**
-     * This variant uses the pool for allocation.
+     * This variant uses the given pool for allocation.
      */
     public NonBlockingConnection(Selector selector, SocketChannel chan,
             PoolInterface<ByteBuffer> pool) throws IOException {
