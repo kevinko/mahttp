@@ -38,7 +38,8 @@ public class Headers {
     protected String canonicalizeKey(String key) {
         StringBuilder builder = new StringBuilder(key.length());
         boolean seenHyphen = false;
-        for (int ii = 0; ii < key.length(); ii++) {
+        final int keyLen = key.length();
+        for (int ii = 0; ii < keyLen; ii++) {
             char ch = key.charAt(ii);
             if (ch == '-') {
                 seenHyphen = true;
