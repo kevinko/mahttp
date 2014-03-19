@@ -16,16 +16,20 @@ class Strings {
     public static final String CRLF = "\r\n";
     public static final byte[] CRLF_BYTES = { (byte) '\r', (byte) '\n' };
 
-    static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
+    // RFC2616 specifies US-ASCII.  However, UTF-8 is a superset of ASCII and
+    // is more efficiently converted from Java's UTF-16.
+    private static final Charset sUTF8Charset = Charset.forName("UTF-8");
 
     /**
      * Returns a String created from buf at buf's current position using its
      * remaining length.
+     *
+     * buf will be interpreted as a UTF-8 string.
      */
     public static String byteBufferToString(ByteBuffer buf) {
         if (buf.hasArray()) {
             int offset = buf.arrayOffset() + buf.position();
-            return new String(buf.array(), offset, buf.remaining(), sUsAsciiCharset);
+            return new String(buf.array(), offset, buf.remaining(), sUTF8Charset);
         }
 
         byte[] data = new byte[buf.remaining()];
@@ -34,7 +38,7 @@ class Strings {
         buf.get(data);
         buf.reset();
 
-        return new String(data, sUsAsciiCharset);
+        return new String(data, sUTF8Charset);
     }
 
     /**
@@ -492,9 +496,9 @@ class Strings {
     }
 
     /**
-     * Writes s to buf, converting s to ASCII format.
+     * Writes s to buf, converting s to UTF-8 format.
      */
-    public static void write(String s, ByteBuffer buf) {
-        buf.put(s.getBytes(sUsAsciiCharset));
+    public static void writeUTF8(String s, ByteBuffer buf) {
+        buf.put(s.getBytes(sUTF8Charset));
     }
 }

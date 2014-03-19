@@ -11,6 +11,9 @@ import java.util.ListIterator;
 /**
  * A ByteBufferArrayBuilder manages a collection of ByteBuffers by dynamically
  * allocating them during a series of string and buffer writes.
+ *
+ * All String contents will be converted to UTF-8 format, which is common
+ * for HTML.
  */
 class ByteBufferArrayBuilder {
     /**
@@ -60,6 +63,8 @@ class ByteBufferArrayBuilder {
          * Adds s to the new sequence starting at the Inserter.
          *
          * One must call close() to finalize all operations.
+         *
+         * s will be converted to UTF-8 when written to the ByteBuffer.
          */
         public void writeString(String s) {
             mRemainingBuf = ByteBufferArrayBuilder.this.insertString(mIter, mRemainingBuf, s);
@@ -237,7 +242,7 @@ class ByteBufferArrayBuilder {
             if (sLen <= remLen) {
                 // The remainder of s fits the current buffer.
                 String writeStr = s.substring(offset);
-                Strings.write(writeStr, currBuf);
+                Strings.writeUTF8(writeStr, currBuf);
 
                 if (sLen == remLen) {
                     // Commit the buffer, since it is full.
@@ -252,7 +257,7 @@ class ByteBufferArrayBuilder {
             // Otherwise, write what we can (remLen bytes).
             int endIndex = offset + remLen;
             String writeStr = s.substring(offset, endIndex);
-            Strings.write(writeStr, currBuf);
+            Strings.writeUTF8(writeStr, currBuf);
 
             offset = endIndex;
             sLen -= remLen;
@@ -290,6 +295,8 @@ class ByteBufferArrayBuilder {
     /**
      * Writes s to the builder, allocating a new internal ByteBuffer if
      * necessary.
+     *
+     * s will be converted to UTF-8 when written to the ByteBuffer.
      */
     public void writeString(String s) {
         // Just add to the tail.

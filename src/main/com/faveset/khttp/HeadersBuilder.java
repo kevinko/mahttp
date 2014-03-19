@@ -5,6 +5,16 @@ package com.faveset.khttp;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * IMPORTANT: all header field names and values must hold only ASCII values.
+ * RFC2616 does allow values to have TEXT (any OCTET except CTLs, including
+ * LWS); however, it also suggests the use of RFC2047 (ASCII-based) encoding
+ * for non-ISO-8859-1 characters.
+ *
+ * We err on the conservative side and only allow the ASCII subset of
+ * ISO-8859-1.  This allows for faster UTF-8 conversions of Java's UTF-16
+ * Strings.
+ */
 public class HeadersBuilder extends Headers {
     public HeadersBuilder() {
         super();
@@ -13,6 +23,9 @@ public class HeadersBuilder extends Headers {
     /**
      * Adds the mapping (key, value), and appends to any existing values
      * if applicable.
+     *
+     * @param key must only contain ASCII characters
+     * @param value must only contain ASCII characters
      */
     public void add(String key, String value) {
         key = canonicalizeKey(key);
@@ -30,6 +43,9 @@ public class HeadersBuilder extends Headers {
      * Appends addedValue to the existing value for key, or creates a new
      * mapping if one does not exist.  A space will separate the existing
      * value and the new value.
+     *
+     * @param key must only contain ASCII characters
+     * @param addedValue must only contain ASCII characters
      */
     public void appendValue(String key, String addedValue) {
         key = canonicalizeKey(key);
@@ -71,6 +87,9 @@ public class HeadersBuilder extends Headers {
     /**
      * Assigns value to the mapping for key.  This clears any existing list
      * values.
+     *
+     * @param key must only contain ASCII characters
+     * @param value must only contain ASCII characters
      */
     public void set(String key, String value) {
         key = canonicalizeKey(key);
@@ -84,6 +103,9 @@ public class HeadersBuilder extends Headers {
     /**
      * Assigns value to the mapping for key.  This overwrites any existing
      * mapping.
+     *
+     * @param key must only contain ASCII characters
+     * @param values must only contain ASCII characters
      */
     public void setList(String key, List<String> values) {
         key = canonicalizeKey(key);

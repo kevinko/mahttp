@@ -103,14 +103,16 @@ public class Headers {
     }
 
     /**
-     * Writes the headers in (HTTP) wire format to buf.
+     * Writes the header fields and values in (HTTP) wire format to buf.
      *
      * @return the number of bytes written.
      */
     public int write(ByteBuffer buf) throws BufferOverflowException {
         int start = buf.position();
         for (Map.Entry<String, List<String>> entry : mHeaders.entrySet()) {
-            Strings.write(entry.getKey(), buf);
+            // Header field names are tokens (ASCII CHAR except
+            // CTLs or separators).  Thus, it's safe to use UTF-8.
+            Strings.writeUTF8(entry.getKey(), buf);
             buf.put(sHeaderDelimBytes);
             writeValue(buf, entry.getValue());
 
@@ -171,6 +173,8 @@ public class Headers {
 
     /**
      * Writes the values as a comma-separated list to buf.
+     *
+     * HeadersBuilder advises that values consists of ASCII characters.
      */
     private static void writeValue(ByteBuffer buf, List<String> values) throws BufferOverflowException {
         if (values.size() == 0) {
@@ -178,11 +182,13 @@ public class Headers {
         }
 
         Iterator<String> iter = values.iterator();
-        Strings.write(iter.next(), buf);
+        // Since value consists of ASCII chars, it is safe to use UTF-8.
+        Strings.writeUTF8(iter.next(), buf);
 
         while (iter.hasNext()) {
             buf.put(sHeaderValueDelimByte);
-            Strings.write(iter.next(), buf);
+            // Since value consists of ASCII chars, it is safe to use UTF-8.
+            Strings.writeUTF8(iter.next(), buf);
         }
     }
 
