@@ -32,7 +32,7 @@ public class HeadersBuilder extends Headers {
 
         List<String> l = mHeaders.get(key);
         if (l == null) {
-            l = new ArrayList<String>();
+            l = new ArrayList<String>(1);
             mHeaders.put(key, l);
         }
 
@@ -94,7 +94,8 @@ public class HeadersBuilder extends Headers {
     public void set(String key, String value) {
         key = canonicalizeKey(key);
 
-        List<String> l = new ArrayList<String>();
+        // In the common case, keys will have a single value.
+        List<String> l = new ArrayList<String>(1);
         l.add(value);
 
         mHeaders.put(key, l);
