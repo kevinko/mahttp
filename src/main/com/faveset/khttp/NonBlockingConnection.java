@@ -54,6 +54,12 @@ class NonBlockingConnection {
         EXTERNAL_MULTIPLE,
     }
 
+    // This limits the number of consecutive read and write operations that
+    // can occur before a Selector select on the connection.  It bounds
+    // the stack depth in cases where callbacks immediately trigger active
+    // sends.  It only affects sendImmediately() and recvImmediately().
+    private static final int sMaxSeqOpCount = 2;
+
     private SocketChannel mChan;
     private SelectionKey mKey;
 
@@ -80,6 +86,11 @@ class NonBlockingConnection {
     // with the Selector.
     private OnRecvCallback mOnRecvCallback;
     private OnSendCallback mOnSendCallback;
+
+    // Counts immediate reads and writes (sendImmediately, recvImmediately)
+    // since the last onSelect operation.  This is used to bound the stack
+    // depth, since send and receive methods can trigger callbacks immediately.
+    private int mSeqOpCount;
 
     private SelectorHandler mSelectorHandler = new SelectorHandler() {
         @Override
@@ -366,6 +377,9 @@ class NonBlockingConnection {
      * of the Selector's select loop.
      */
     private void onSelect() {
+        // This is a fresh select operation, so reset the op count.
+        mSeqOpCount = 0;
+
         try {
             SelectionKey key = mKey;
 
@@ -418,6 +432,21 @@ class NonBlockingConnection {
         mIsRecvPersistent = isPersistent;
 
         // To minimize latency, try receiving immediately.
+        recvImmediately();
+    }
+
+    /**
+     * Attempts to receive immediately, while respecting mSeqOpCount to restrict
+     * stack-depth.  Receive-related fields must already be prepared.
+     *
+     * The error callback will be called on error.
+     */
+    private void recvImmediately() {
+        mSeqOpCount++;
+        if (mSeqOpCount > sMaxSeqOpCount) {
+            return;
+        }
+
         try {
             handleRead();
         } catch (IOException e) {
@@ -502,6 +531,21 @@ class NonBlockingConnection {
         registerSendCallback(callback);
 
         // To minimize latency, try sending immediately.
+        sendImmediately();
+    }
+
+    /**
+     * Attempts to send immediately, while respecting mSeqOpCount to restrict
+     * stack-depth.  Send-related fields must already be prepared.
+     *
+     * The error callback will be called on error.
+     */
+    private void sendImmediately() {
+        mSeqOpCount++;
+        if (mSeqOpCount > sMaxSeqOpCount) {
+            return;
+        }
+
         try {
             handleWrite();
         } catch (IOException e) {
@@ -536,13 +580,7 @@ class NonBlockingConnection {
         registerSendCallback(callback);
 
         // To minimize latency, try sending immediately.
-        try {
-            handleWrite();
-        } catch (IOException e) {
-            if (mOnErrorCallback != null) {
-                mOnErrorCallback.onError(this, e.toString());
-            }
-        }
+        sendImmediately();
     }
 
     /**
