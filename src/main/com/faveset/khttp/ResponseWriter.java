@@ -59,7 +59,7 @@ class ResponseWriter implements HttpResponseWriter {
      * One must call close() to clean up resources when the ResponseWriter
      * is no longer needed.
      */
-    public ResponseWriter(PoolInterface<ByteBuffer> pool) {
+    public ResponseWriter(Pool<ByteBuffer> pool) {
         mHeadersBuilder = new HeadersBuilder();
 
         mBufBuilder = new ByteBufferArrayBuilder(pool);

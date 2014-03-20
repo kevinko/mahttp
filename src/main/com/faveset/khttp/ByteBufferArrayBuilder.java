@@ -72,7 +72,7 @@ class ByteBufferArrayBuilder {
         }
     }
 
-    private PoolInterface<ByteBuffer> mByteBufferPool;
+    private Pool<ByteBuffer> mByteBufferPool;
     // This tracks each PoolEntry so that we can release the ByteBuffer
     // back to the pool.
     private List<PoolEntry<ByteBuffer>> mPoolEntries;
@@ -104,7 +104,7 @@ class ByteBufferArrayBuilder {
      * The caller must close() the returned ByteBufferArrayBuilder when no
      * longer needed.
      */
-    public ByteBufferArrayBuilder(PoolInterface<ByteBuffer> pool) {
+    public ByteBufferArrayBuilder(Pool<ByteBuffer> pool) {
         mByteBufferPool = pool;
         mPoolEntries = new ArrayList<PoolEntry<ByteBuffer>>();
 

@@ -4,7 +4,7 @@ package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
 
-class ByteBufferPool extends Pool<ByteBuffer> {
+class ByteBufferPool extends BasePool<ByteBuffer> {
     private static final int sDefaultMaxCount = 128;
 
     // Size of each ByteBuffer to allocate.

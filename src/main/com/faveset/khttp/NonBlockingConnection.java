@@ -63,7 +63,7 @@ class NonBlockingConnection {
     private SocketChannel mChan;
     private SelectionKey mKey;
 
-    private PoolInterface<ByteBuffer> mPool;
+    private Pool<ByteBuffer> mPool;
 
     private PoolEntry<ByteBuffer> mInBufferEntry;
     private PoolEntry<ByteBuffer> mOutBufferInternalEntry;
@@ -126,7 +126,9 @@ class NonBlockingConnection {
      * The NonBlockingConnection manages registration of Selector interest.
      * A SelectorHandler will be attached to all Selector keys.
      *
-     * @bufferSize size in bytes for the send and receive buffers.
+     * @param selector
+     * @param chan
+     * @param bufferSize size in bytes for the send and receive buffers.
      *
      * @throws IOException on I/O error.
      */
@@ -140,7 +142,7 @@ class NonBlockingConnection {
      * This variant uses the given pool for allocation.
      */
     public NonBlockingConnection(Selector selector, SocketChannel chan,
-            PoolInterface<ByteBuffer> pool) throws IOException {
+            Pool<ByteBuffer> pool) throws IOException {
         this(selector, chan, null, null);
 
         mPool = pool;

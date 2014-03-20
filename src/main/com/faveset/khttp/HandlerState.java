@@ -45,7 +45,7 @@ class HandlerState {
      * One must call close() when the constructed HandlerState is no longer
      * needed.
      */
-    public HandlerState(PoolInterface<ByteBuffer> pool) {
+    public HandlerState(Pool<ByteBuffer> pool) {
         mReq = new HttpRequestBuilder();
         mResponseWriter = new ResponseWriter(pool);
     }
