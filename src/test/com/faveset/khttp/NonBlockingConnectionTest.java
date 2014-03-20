@@ -401,13 +401,20 @@ public class NonBlockingConnectionTest {
     public void testSendBuffers() throws IOException, InterruptedException {
         // Pick an number that is not divisible by a buffer size.
         final String expectedString = makeTestString(5001);
-        ByteBufferArrayBuilder pool = new ByteBufferArrayBuilder(16, true);
-        pool.writeString(expectedString);
+        final ByteBufferArrayBuilder builder = new ByteBufferArrayBuilder(16, true);
+        builder.writeString(expectedString);
 
-        final long remCount = pool.remaining();
-        final ByteBuffer[] bufs = pool.build();
+        final long remCount = builder.remaining();
+        final ByteBuffer[] bufs = builder.build();
 
         Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
+            @Override
+            protected void finish() {
+                super.finish();
+
+                builder.close();
+            }
+
             @Override
             protected void prepareConn(NonBlockingConnection conn) {
                 conn.send(new NonBlockingConnection.OnSendCallback() {
