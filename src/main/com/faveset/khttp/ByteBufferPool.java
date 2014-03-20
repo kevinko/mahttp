@@ -42,4 +42,9 @@ class ByteBufferPool extends Pool<ByteBuffer> {
         }
         return ByteBuffer.allocate(mBufSize);
     }
+
+    @Override
+    protected void resetValue(ByteBuffer v) {
+        v.clear();
+    }
 }

@@ -28,14 +28,25 @@ public class ByteBufferPoolTest {
         assertTrue(entry2.get() != null);
         assertEquals(0, pool.getFreeEntryCount());
 
+        //
         // Test below boundary when releasing.
+        //
+
+        // Fill entry 1 with something to test reset.
+        entry1.get().put((byte) 1);
+
         assertEquals(null, pool.release(entry1));
         assertEquals(1, pool.getFreeEntryCount());
 
+        // We are reallocating from the pool.
         assertEquals(entry1, pool.allocate());
         assertEquals(0, pool.getFreeEntryCount());
+        // Make sure that the entry is reset.
+        assertEquals(0, entry1.get().position());
 
+        //
         // Now test above boundary.
+        //
         PoolEntry<ByteBuffer> entry3 = pool.allocate();
         assertTrue(entry3 != null);
         assertEquals(0, pool.getFreeEntryCount());

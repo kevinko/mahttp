@@ -38,8 +38,10 @@ abstract class Pool<T> implements PoolInterface<T> {
             entry = new PoolEntry<T>(mTagCount, allocateValue());
             mTagCount++;
         } else {
+            // Otherwise, use a value from the pool.
             Iterator<PoolEntry<T>> iter = mFreeEntries.iterator();
             entry = iter.next();
+            resetValue(entry.get());
             iter.remove();
         }
 
@@ -78,4 +80,11 @@ abstract class Pool<T> implements PoolInterface<T> {
 
         return null;
     }
+
+    /**
+     * Child classes should implement this to reset a value.  Values are
+     * reset when released to the pool so that a cleared value will be
+     * returned on allocate().
+     */
+    protected abstract void resetValue(T v);
 }
