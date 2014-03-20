@@ -32,9 +32,22 @@ class HandlerState {
 
     private OnRequestCallback mOnRequestCallback;
 
+    /**
+     * One must call close() when the constructed HandlerState is no longer
+     * needed.
+     */
     public HandlerState() {
         mReq = new HttpRequestBuilder();
         mResponseWriter = new ResponseWriter();
+    }
+
+    /**
+     * One must call close() when the constructed HandlerState is no longer
+     * needed.
+     */
+    public HandlerState(PoolInterface<ByteBuffer> pool) {
+        mReq = new HttpRequestBuilder();
+        mResponseWriter = new ResponseWriter(pool);
     }
 
     /**
@@ -45,6 +58,13 @@ class HandlerState {
         mReq.clear();
         mResponseWriter.clear();
         mLastHeaderName = "";
+    }
+
+    /**
+     * Closes all resources used by the HandlerState.
+     */
+    public void close() {
+        mResponseWriter.close();
     }
 
     /**

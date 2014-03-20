@@ -22,12 +22,6 @@ class ResponseWriter implements HttpResponseWriter {
     // in sReasonMap.
     private static final String sUnknownReason = "Unknown";
 
-    // Most web servers set the max total header length to 4-8KB, so
-    // we'll just choose a standard page size.  The ByteBufferArrayBuilder will
-    // grow as needed; though, this size should handle most cases without
-    // additional allocations.
-    private static final int sBufferSize = 4096;
-
     private HeadersBuilder mHeadersBuilder;
 
     private ByteBufferArrayBuilder mBufBuilder;
@@ -51,15 +45,33 @@ class ResponseWriter implements HttpResponseWriter {
     // is sent.
     private boolean mCloseConnection;
 
+    /**
+     * The default constructor uses heap-based ByteBuffers internally.
+     *
+     * One must call close() to clean up resources when the ResponseWriter
+     * is no longer needed.
+     */
     public ResponseWriter() {
+        this(new NullByteBufferPool(Constants.BYTE_BUFFER_SIZE, false));
+    }
+
+    /**
+     * One must call close() to clean up resources when the ResponseWriter
+     * is no longer needed.
+     */
+    public ResponseWriter(PoolInterface<ByteBuffer> pool) {
         mHeadersBuilder = new HeadersBuilder();
 
-        // Use direct allocations.
-        mBufBuilder = new ByteBufferArrayBuilder(sBufferSize, Constants.USE_DIRECT_BUFFERS);
+        mBufBuilder = new ByteBufferArrayBuilder(pool);
 
+        // This is called on completion of a NonBlockingConnection send.
         mNbcSendCallback = new NonBlockingConnection.OnSendCallback() {
             @Override
             public void onSend(NonBlockingConnection conn) {
+                // Clean up the ByteBufferArrayBuilder in preparation for
+                // future sends.
+                mBufBuilder.clear();
+
                 mSendCallback.onSend();
             }
         };
@@ -82,6 +94,13 @@ class ResponseWriter implements HttpResponseWriter {
         mSentCount = 0;
 
         mCloseConnection = false;
+    }
+
+    /**
+     * This must be called to release internal resources.
+     */
+    public void close() {
+        mBufBuilder.close();
     }
 
     /**
@@ -145,6 +164,7 @@ class ResponseWriter implements HttpResponseWriter {
         long remCount = mBufBuilder.remaining();
         mSentCount = remCount;
 
+        // mNbcSendCallback cleans up the mBufBuilder.
         ByteBuffer[] bufs = mBufBuilder.build();
         conn.send(mNbcSendCallback, bufs, remCount);
     }

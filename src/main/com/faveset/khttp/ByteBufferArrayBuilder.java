@@ -4,6 +4,7 @@ package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
@@ -71,9 +72,11 @@ class ByteBufferArrayBuilder {
         }
     }
 
-    private boolean mIsDirect;
+    private PoolInterface<ByteBuffer> mByteBufferPool;
+    // This tracks each PoolEntry so that we can release the ByteBuffer
+    // back to the pool.
+    private List<PoolEntry<ByteBuffer>> mPoolEntries;
 
-    private int mBufSize;
     private List<ByteBuffer> mBufs;
 
     // This tracks all remaining counts except for mCurrBuf (i.e., mBufs).
@@ -85,34 +88,42 @@ class ByteBufferArrayBuilder {
     private ByteBuffer mCurrBuf;
 
     /**
-     * @param bufSize the size of each ByteBuffer to allocate.
-     * @param isDirect true if a direct ByteBuffer should be allocated.
+     * The caller must close() the returned ByteBufferArrayBuilder when no
+     * longer needed.
+     *
+     * @param bufSize size of each ByteBuffer to allocate
+     * @param isDirect true if direct buffers should be used
      */
     public ByteBufferArrayBuilder(int bufSize, boolean isDirect) {
-        mIsDirect = isDirect;
-        mBufSize = bufSize;
+        this(new NullByteBufferPool(bufSize, isDirect));
+    }
+
+    /**
+     * Creates a ByteBufferArrayBuilder that uses the given ByteBuffer pool.
+     *
+     * The caller must close() the returned ByteBufferArrayBuilder when no
+     * longer needed.
+     */
+    public ByteBufferArrayBuilder(PoolInterface<ByteBuffer> pool) {
+        mByteBufferPool = pool;
+        mPoolEntries = new ArrayList<PoolEntry<ByteBuffer>>();
+
         mBufs = new LinkedList<ByteBuffer>();
     }
 
     private ByteBuffer allocate() {
-        return allocate(mBufSize);
+        PoolEntry<ByteBuffer> entry = mByteBufferPool.allocate();
+        mPoolEntries.add(entry);
+        return entry.get();
     }
 
     /**
-     * @param size in bytes for the new ByteBuffer
-     */
-    private ByteBuffer allocate(int size) {
-        if (mIsDirect) {
-            return ByteBuffer.allocateDirect(size);
-        }
-        return ByteBuffer.allocate(size);
-    }
-
-    /**
-     * Closes the builder to future writes and returns an array for consumption
-     * by a Channel.  The returned buffers will have total remaining bytes
-     * of remaining().  After build(), the builder will be reset (remaining()
-     * will be cleared).
+     * Returns an array for consumption by a Channel.  The returned buffers
+     * will have total remaining bytes of remaining().
+     *
+     * After build(), the builder state will be indeterminate.  One must call
+     * clear() or close() to clear the state and also to free up resources
+     * before discarding or reusing the builder.
      */
     public ByteBuffer[] build() {
         if (mCurrBuf != null) {
@@ -121,18 +132,34 @@ class ByteBufferArrayBuilder {
 
         ByteBuffer[] result = mBufs.toArray(new ByteBuffer[0]);
 
-        clear();
-
         return result;
     }
 
     /**
-     * Resets the builder to the initial state.
+     * Resets the builder to the initial state so that it can be reused.
+     *
+     * This must be called to release resources.  It may be used
+     * interchangeably with close().
      */
     public void clear() {
+        for (PoolEntry<ByteBuffer> entry : mPoolEntries) {
+            mByteBufferPool.release(entry);
+        }
+        mPoolEntries.clear();
+
         mCurrBuf = null;
         mBufs.clear();
         mRemaining = 0;
+    }
+
+    /**
+     * The caller must call this to release all (pooled) resources.
+     *
+     * The builder will be cleared and can be reused.  It may be used
+     * interchangeably with clear().
+     */
+    public void close() {
+        clear();
     }
 
     /**
