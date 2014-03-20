@@ -109,7 +109,7 @@ class NonBlockingConnection {
      *
      * @throws IOException
      */
-    private NonBlockingConnection(Selector selector, SocketChannel chan,
+    public NonBlockingConnection(Selector selector, SocketChannel chan,
             ByteBuffer inBuf, ByteBuffer outBuf) throws IOException {
         chan.configureBlocking(false);
         mChan = chan;
@@ -583,6 +583,26 @@ class NonBlockingConnection {
 
         // To minimize latency, try sending immediately.
         sendImmediately();
+    }
+
+    /**
+     * Replaces the internal in buffer.
+     */
+    public void setInBufferInternal(ByteBuffer buf) {
+        if (mInBufferEntry != null) {
+            mInBufferEntry = mPool.release(mInBufferEntry);
+        }
+        mInBuffer = buf;
+    }
+
+    /**
+     * Replaces the internal out buffer.
+     */
+    public void setOutBufferInternal(ByteBuffer buf) {
+        if (mOutBufferInternalEntry != null) {
+            mOutBufferInternalEntry = mPool.release(mOutBufferInternalEntry);
+        }
+        mOutBufferInternal = buf;
     }
 
     /**
