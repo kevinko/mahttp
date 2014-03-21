@@ -64,7 +64,6 @@ public class HttpConnectionTest {
 
             prepareConn(conn);
 
-            SelectionKey connKey = conn.getNonBlockingConnection().getSelectionKey();
             while (true) {
                 // We busy wait here, since we want to stop as soon as all keys
                 // are cancelled.
