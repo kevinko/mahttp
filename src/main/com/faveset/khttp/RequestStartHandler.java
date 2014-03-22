@@ -15,7 +15,7 @@ class RequestStartHandler implements StateHandler {
      * line.
      */
     @Override
-    public boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
+    public boolean handleState(AsyncConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
         // The spec allows for leading CRLFs.
         Strings.skipCrlf(buf);
 

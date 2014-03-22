@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 
 class MessageBodyHandler implements StateHandler {
     @Override
-    public boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
+    public boolean handleState(AsyncConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException {
         HttpRequest req = state.getRequestBuilder();
 
         // Trim the data buff depending on request's headers.

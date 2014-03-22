@@ -64,7 +64,6 @@ public class NonBlockingConnectionTest {
 
             prepareConn(conn);
 
-            SelectionKey connKey = conn.getSelectionKey();
             while (true) {
                 // We busy wait here, since we want to stop as soon as all keys
                 // are cancelled.
@@ -109,8 +108,8 @@ public class NonBlockingConnectionTest {
         Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
             @Override
             protected void prepareConn(NonBlockingConnection conn) {
-                conn.recv(new NonBlockingConnection.OnRecvCallback() {
-                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                conn.recv(new AsyncConnection.OnRecvCallback() {
+                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
                         try {
                             ByteBuffer cmpBuf = ByteBuffer.allocate(1024);
 
@@ -139,9 +138,9 @@ public class NonBlockingConnectionTest {
             private int mRecvCount = 0;
             private ByteBuffer mCmpBuf = ByteBuffer.allocate(2 * expectedStr.length());
 
-            private NonBlockingConnection.OnRecvCallback makeRecvCallback() {
-                return new NonBlockingConnection.OnRecvCallback() {
-                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+            private AsyncConnection.OnRecvCallback makeRecvCallback() {
+                return new AsyncConnection.OnRecvCallback() {
+                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
                         handleRecv(conn, buf);
                     }
                 };
@@ -154,7 +153,7 @@ public class NonBlockingConnectionTest {
                 assertTrue(mRecvCount > 1);
             }
 
-            private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
+            private void handleRecv(AsyncConnection conn, ByteBuffer buf) {
                 mRecvCount++;
 
                 try {
@@ -276,9 +275,9 @@ public class NonBlockingConnectionTest {
             private int mRecvCount = 0;
             private ByteBuffer mCmpBuf = ByteBuffer.allocate(2 * expectedStr.length());
 
-            private NonBlockingConnection.OnRecvCallback makeRecvCallback() {
-                return new NonBlockingConnection.OnRecvCallback() {
-                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+            private AsyncConnection.OnRecvCallback makeRecvCallback() {
+                return new AsyncConnection.OnRecvCallback() {
+                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
                         handleRecv(conn, buf);
                     }
                 };
@@ -291,7 +290,7 @@ public class NonBlockingConnectionTest {
                 assertTrue(mRecvCount > 1);
             }
 
-            private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
+            private void handleRecv(AsyncConnection conn, ByteBuffer buf) {
                 mRecvCount++;
 
                 try {
@@ -358,8 +357,8 @@ public class NonBlockingConnectionTest {
 
                 buf.flip();
 
-                conn.send(new NonBlockingConnection.OnSendCallback() {
-                    public void onSend(NonBlockingConnection conn) {
+                conn.send(new AsyncConnection.OnSendCallback() {
+                    public void onSend(AsyncConnection conn) {
                         try {
                             conn.close();
                         } catch (IOException e) {
@@ -382,8 +381,8 @@ public class NonBlockingConnectionTest {
             protected void prepareConn(NonBlockingConnection conn) {
                 ByteBuffer src = Helper.makeByteBuffer(expectedString);
 
-                conn.send(new NonBlockingConnection.OnSendCallback() {
-                    public void onSend(NonBlockingConnection conn) {
+                conn.send(new AsyncConnection.OnSendCallback() {
+                    public void onSend(AsyncConnection conn) {
                         try {
                             conn.close();
                         } catch (IOException e) {
@@ -417,8 +416,8 @@ public class NonBlockingConnectionTest {
 
             @Override
             protected void prepareConn(NonBlockingConnection conn) {
-                conn.send(new NonBlockingConnection.OnSendCallback() {
-                    public void onSend(NonBlockingConnection conn) {
+                conn.send(new AsyncConnection.OnSendCallback() {
+                    public void onSend(AsyncConnection conn) {
                         try {
                             conn.close();
                         } catch (IOException e) {
@@ -445,10 +444,10 @@ public class NonBlockingConnectionTest {
                 outBuf.put(buf);
                 outBuf.flip();
 
-                conn.sendPartial(new NonBlockingConnection.OnSendCallback() {
+                conn.sendPartial(new AsyncConnection.OnSendCallback() {
                     private int mSendCount = 0;
 
-                    public void onSend(NonBlockingConnection conn) {
+                    public void onSend(AsyncConnection conn) {
                         try {
                             mSendCount++;
 
@@ -492,8 +491,8 @@ public class NonBlockingConnectionTest {
 
             @Override
             protected void prepareConn(NonBlockingConnection conn) {
-                conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
-                    public void onClose(NonBlockingConnection conn) {
+                conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
+                    public void onClose(AsyncConnection conn) {
                         mCloseCount++;
 
                         try {
@@ -505,7 +504,7 @@ public class NonBlockingConnectionTest {
                 });
 
                 conn.recvPersistent(new NonBlockingConnection.OnRecvCallback() {
-                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
                         // Just eat up the data.
                     }
                 });
@@ -541,8 +540,8 @@ public class NonBlockingConnectionTest {
 
             @Override
             protected void prepareConn(NonBlockingConnection conn) {
-                conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
-                    public void onClose(NonBlockingConnection conn) {
+                conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
+                    public void onClose(AsyncConnection conn) {
                         mCloseCount++;
 
                         try {
@@ -553,8 +552,8 @@ public class NonBlockingConnectionTest {
                     }
                 });
 
-                conn.setOnErrorCallback(new NonBlockingConnection.OnErrorCallback() {
-                    public void onError(NonBlockingConnection conn, String reason) {
+                conn.setOnErrorCallback(new AsyncConnection.OnErrorCallback() {
+                    public void onError(AsyncConnection conn, String reason) {
                         mErrorCount++;
 
                         try {
@@ -569,8 +568,8 @@ public class NonBlockingConnectionTest {
                 outBuf.put(buf);
                 outBuf.flip();
 
-                conn.send(new NonBlockingConnection.OnSendCallback() {
-                    public void onSend(NonBlockingConnection conn) {
+                conn.send(new AsyncConnection.OnSendCallback() {
+                    public void onSend(AsyncConnection conn) {
                         assertTrue(false);
                     }
                 });
@@ -613,8 +612,8 @@ public class NonBlockingConnectionTest {
                 // a delay.
                 delayedStop(1000);
 
-                conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
-                    public void onClose(NonBlockingConnection conn) {
+                conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
+                    public void onClose(AsyncConnection conn) {
                         mCloseCount++;
 
                         try {
@@ -628,8 +627,8 @@ public class NonBlockingConnectionTest {
                 // This is intentionally not a persistent receive.  The
                 // receive will be cancelled as a result and should not
                 // be called again.
-                conn.recv(new NonBlockingConnection.OnRecvCallback() {
-                    public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+                conn.recv(new AsyncConnection.OnRecvCallback() {
+                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
                         mRecvCount++;
                     }
                 });
@@ -672,8 +671,8 @@ public class NonBlockingConnectionTest {
                 // a delay.
                 delayedStop(1000);
 
-                conn.setOnCloseCallback(new NonBlockingConnection.OnCloseCallback() {
-                    public void onClose(NonBlockingConnection conn) {
+                conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
+                    public void onClose(AsyncConnection conn) {
                         mCloseCount++;
 
                         try {
@@ -691,8 +690,8 @@ public class NonBlockingConnectionTest {
                 outBuf.flip();
                 buf.limit(origLimit);
 
-                conn.send(new NonBlockingConnection.OnSendCallback() {
-                    public void onSend(NonBlockingConnection conn) {
+                conn.send(new AsyncConnection.OnSendCallback() {
+                    public void onSend(AsyncConnection conn) {
                         mSendCount++;
 
                         // Write just a portion of the expected string.  Since

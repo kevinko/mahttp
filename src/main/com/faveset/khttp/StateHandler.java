@@ -20,5 +20,5 @@ interface StateHandler {
      *
      * @throws InvalidRequestException
      */
-    boolean handleState(NonBlockingConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException;
+    boolean handleState(AsyncConnection conn, ByteBuffer buf, HandlerState state) throws InvalidRequestException;
 }

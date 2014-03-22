@@ -20,7 +20,7 @@ import com.faveset.log.NullLog;
 /**
  * Handles an HTTP request in non-blocking fashion.
  *
- * This follows the protocol outlined in NonBlockingConnection for handling
+ * This follows the protocol outlined in AsyncConnection for handling
  * closes: bubble up to the higher level via OnCloseCallback and expect the
  * upper level to eventually call HttpConnection's close().
  */
@@ -89,7 +89,7 @@ class HttpConnection {
 
     private Map<String, HttpHandler> mHttpHandlerMap;
 
-    private NonBlockingConnection mConn;
+    private AsyncConnection mConn;
 
     private HandlerState mHandlerState;
 
@@ -97,26 +97,26 @@ class HttpConnection {
 
     private OnCloseCallback mOnCloseCallback;
 
-    private NonBlockingConnection.OnCloseCallback mNbcCloseCallback =
-        new NonBlockingConnection.OnCloseCallback() {
+    private AsyncConnection.OnCloseCallback mNbcCloseCallback =
+        new AsyncConnection.OnCloseCallback() {
             @Override
-            public void onClose(NonBlockingConnection conn) {
+            public void onClose(AsyncConnection conn) {
                 handleClose(conn);
             }
         };
 
-    private NonBlockingConnection.OnErrorCallback mNbcErrorCallback =
-        new NonBlockingConnection.OnErrorCallback() {
+    private AsyncConnection.OnErrorCallback mNbcErrorCallback =
+        new AsyncConnection.OnErrorCallback() {
             @Override
-            public void onError(NonBlockingConnection conn, String reason) {
+            public void onError(AsyncConnection conn, String reason) {
                 handleError(conn, reason);
             }
         };
 
-    private NonBlockingConnection.OnRecvCallback mNbcRecvCallback =
-        new NonBlockingConnection.OnRecvCallback() {
+    private AsyncConnection.OnRecvCallback mNbcRecvCallback =
+        new AsyncConnection.OnRecvCallback() {
             @Override
-            public void onRecv(NonBlockingConnection conn, ByteBuffer buf) {
+            public void onRecv(AsyncConnection conn, ByteBuffer buf) {
                 handleRecv(conn, buf);
             }
         };
@@ -181,9 +181,9 @@ class HttpConnection {
     }
 
     /**
-     * @return the underlying NonBlockingConnection.
+     * @return the underlying AsyncConnection.
      */
-    public NonBlockingConnection getNonBlockingConnection() {
+    public AsyncConnection getAsyncConnection() {
         return mConn;
     }
 
@@ -191,19 +191,19 @@ class HttpConnection {
      * Handle read closes.  This adheres to our protocol described at the
      * top of the file.
      */
-    private void handleClose(NonBlockingConnection conn) {
+    private void handleClose(AsyncConnection conn) {
         if (mOnCloseCallback != null) {
             mOnCloseCallback.onClose(this);
         }
     }
 
-    private void handleError(NonBlockingConnection conn, String reason) {
+    private void handleError(AsyncConnection conn, String reason) {
         mLog.e(sTag, "error with connection, closing: " + reason);
 
         handleClose(conn);
     }
 
-    private void handleRecv(NonBlockingConnection conn, ByteBuffer buf) {
+    private void handleRecv(AsyncConnection conn, ByteBuffer buf) {
         boolean done = false;
         do {
             done = handleStateStep(conn, buf);
@@ -272,7 +272,7 @@ class HttpConnection {
      * @return true if more data needs to be read into buf.  The receive
      * handler will finish as a result.
      */
-    private boolean handleStateStep(NonBlockingConnection conn, ByteBuffer buf) {
+    private boolean handleStateStep(AsyncConnection conn, ByteBuffer buf) {
         StateEntry entry = mStateHandlerMap.get(mState);
         if (entry == null) {
             mLog.e(sTag, "invalid HTTP state: " + mState);
@@ -355,7 +355,7 @@ class HttpConnection {
      *
      * Receive callbacks will be blocked until send completion.
      */
-    private void sendResponse(NonBlockingConnection conn, ResponseWriter w) {
+    private void sendResponse(AsyncConnection conn, ResponseWriter w) {
         mState = State.RESPONSE_SEND;
 
         // Turn off receive callbacks, since the state machine is in a send

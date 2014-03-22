@@ -15,37 +15,7 @@ import java.nio.channels.SocketChannel;
  *   via the OnCloseCallback.  We then expect the user to call close() when
  *   ready.
  */
-class NonBlockingConnection {
-    /**
-     * Called when the connection is closed by the peer.  The callback should
-     * call close() to clean up.
-     *
-     * Socket closes are only detected on read, because send errors can
-     * manifest in different ways (various IOExceptions).
-     */
-    public interface OnCloseCallback {
-        void onClose(NonBlockingConnection conn);
-    }
-
-    /**
-     * Called whenever an unrecoverable error (e.g., IOException) occurs
-     * while reading/writing the underlying socket.
-     */
-    public interface OnErrorCallback {
-        void onError(NonBlockingConnection conn, String reason);
-    }
-
-    /**
-     * Called when new data is received.  buf is the in buffer.
-     */
-    public interface OnRecvCallback {
-        void onRecv(NonBlockingConnection conn, ByteBuffer buf);
-    }
-
-    public interface OnSendCallback {
-        void onSend(NonBlockingConnection conn);
-    }
-
+class NonBlockingConnection implements AsyncConnection {
     private enum SendType {
         INTERNAL,
         INTERNAL_PARTIAL,
@@ -157,6 +127,7 @@ class NonBlockingConnection {
      *
      * @return the cancelled callback, which will be null if not assigned.
      */
+    @Override
     public OnRecvCallback cancelRecv() {
         OnRecvCallback result = mOnRecvCallback;
 
@@ -204,6 +175,7 @@ class NonBlockingConnection {
      *
      * @throws IOException if the underlying socket experienced an I/O error.
      */
+    @Override
     public void close() throws IOException {
         // This also cancels the key.
         mChan.close();
@@ -236,15 +208,9 @@ class NonBlockingConnection {
     /**
      * @return the internal send buffer.
      */
+    @Override
     public ByteBuffer getOutBuffer() {
         return mOutBufferInternal;
-    }
-
-    /**
-     * @return the SelectionKey for the connection.
-     */
-    public SelectionKey getSelectionKey() {
-        return mKey;
     }
 
     /**
@@ -420,6 +386,7 @@ class NonBlockingConnection {
      *
      * The in buffer will also be cleared when the recv is performed.
      */
+    @Override
     public void recv(OnRecvCallback callback) {
         recvImpl(callback, false);
     }
@@ -462,6 +429,7 @@ class NonBlockingConnection {
      * A persistent version of recv.  The callback will remain scheduled
      * until the recv is cancelled with cancelRecv.
      */
+    @Override
     public void recvPersistent(OnRecvCallback callback) {
         recvImpl(callback, true);
     }
@@ -485,6 +453,7 @@ class NonBlockingConnection {
      * be compacted, cleared, or otherwise modified.  The callback is not
      * persistent.
      */
+    @Override
     public void send(OnSendCallback callback) {
         sendImpl(SendType.INTERNAL, mOutBufferInternal, callback);
     }
@@ -499,6 +468,7 @@ class NonBlockingConnection {
      *
      * @param callback will be called on completion.
      */
+    @Override
     public void send(OnSendCallback callback, ByteBuffer buf) {
         sendImpl(SendType.EXTERNAL_SINGLE, buf, callback);
     }
@@ -510,6 +480,7 @@ class NonBlockingConnection {
      * @param bufsRemaining is the total number of bytes remaining for bufs.
      * Set to 0 to calculate automatically.
      */
+    @Override
     public void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining) {
         mSendType = SendType.EXTERNAL_MULTIPLE;
         mExternalOutBuffers = bufs;
@@ -614,6 +585,7 @@ class NonBlockingConnection {
      * If a send is called during the callback, it will take priority over
      * whatever remains in the internal buffer.
      */
+    @Override
     public void sendPartial(OnSendCallback callback) {
         sendImpl(SendType.INTERNAL_PARTIAL, mOutBufferInternal, callback);
     }
@@ -624,7 +596,8 @@ class NonBlockingConnection {
      *
      * @return this for chaining
      */
-    public NonBlockingConnection setOnCloseCallback(OnCloseCallback callback) {
+    @Override
+    public AsyncConnection setOnCloseCallback(OnCloseCallback callback) {
         mOnCloseCallback = callback;
         return this;
     }
@@ -635,7 +608,8 @@ class NonBlockingConnection {
      *
      * @return this for chaining
      */
-    public NonBlockingConnection setOnErrorCallback(OnErrorCallback callback) {
+    @Override
+    public AsyncConnection setOnErrorCallback(OnErrorCallback callback) {
         mOnErrorCallback = callback;
         return this;
     }
@@ -643,6 +617,7 @@ class NonBlockingConnection {
     /**
      * @return the underlying SocketChannel
      */
+    @Override
     public SocketChannel socketChannel() {
         return mChan;
     }

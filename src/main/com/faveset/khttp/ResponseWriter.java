@@ -28,7 +28,7 @@ class ResponseWriter implements HttpResponseWriter {
 
     private OnSendCallback mSendCallback;
 
-    private NonBlockingConnection.OnSendCallback mNbcSendCallback;
+    private AsyncConnection.OnSendCallback mNbcSendCallback;
 
     // Tracks whether writeHeader() has been called explicitly.
     private boolean mWroteHeaders;
@@ -64,10 +64,10 @@ class ResponseWriter implements HttpResponseWriter {
 
         mBufBuilder = new ByteBufferArrayBuilder(pool);
 
-        // This is called on completion of a NonBlockingConnection send.
-        mNbcSendCallback = new NonBlockingConnection.OnSendCallback() {
+        // This is called on completion of a AsyncConnection send.
+        mNbcSendCallback = new AsyncConnection.OnSendCallback() {
             @Override
-            public void onSend(NonBlockingConnection conn) {
+            public void onSend(AsyncConnection conn) {
                 // Clean up the ByteBufferArrayBuilder in preparation for
                 // future sends.
                 mBufBuilder.clear();
@@ -132,7 +132,7 @@ class ResponseWriter implements HttpResponseWriter {
 
     /**
      * Finalizes the response and sends it over the connection.  This manages
-     * NonBlockingConnection callbacks until completion and then calls
+     * AsyncConnection callbacks until completion and then calls
      * callback when sending is done.
      *
      * This method is not idempotent.  The response body will be cleared as
@@ -141,7 +141,7 @@ class ResponseWriter implements HttpResponseWriter {
      * The callback should clear the ResponseWriter's state before reusing
      * the ResponseWriter.
      */
-    public void send(NonBlockingConnection conn, OnSendCallback callback) {
+    public void send(AsyncConnection conn, OnSendCallback callback) {
         mSendCallback = callback;
 
         // We just support Content-length for now.
