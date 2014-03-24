@@ -35,10 +35,14 @@ class NonBlockingConnection implements AsyncConnection {
 
     private Pool<ByteBuffer> mPool;
 
-    private PoolEntry<ByteBuffer> mInBufferEntry;
+    private PoolEntry<ByteBuffer> mInBufferInternalEntry;
     private PoolEntry<ByteBuffer> mOutBufferInternalEntry;
 
+    // This can point to an external or internal buffer, depending on the
+    // recv method.
     private ByteBuffer mInBuffer;
+
+    private ByteBuffer mInBufferInternal;
 
     // This can point to an external or internal buffer.  It is configured
     // by send methods.
@@ -86,7 +90,7 @@ class NonBlockingConnection implements AsyncConnection {
         mKey = mChan.register(selector, 0);
         mKey.attach(mSelectorHandler);
 
-        mInBuffer = inBuf;
+        mInBufferInternal = inBuf;
         mOutBufferInternal = outBuf;
 
         mSendType = SendType.INTERNAL;
@@ -116,8 +120,8 @@ class NonBlockingConnection implements AsyncConnection {
         this(selector, chan, null, null);
 
         mPool = pool;
-        mInBufferEntry = pool.allocate();
-        mInBuffer = mInBufferEntry.get();
+        mInBufferInternalEntry = pool.allocate();
+        mInBufferInternal = mInBufferInternalEntry.get();
         mOutBufferInternalEntry = pool.allocate();
         mOutBufferInternal = mOutBufferInternalEntry.get();
     }
@@ -135,8 +139,11 @@ class NonBlockingConnection implements AsyncConnection {
             return result;
         }
 
+        // Reset to the initial state.
         mOnRecvCallback = null;
         mIsRecvPersistent = false;
+
+        mInBuffer = null;
 
         int newOps = mKey.interestOps() & ~SelectionKey.OP_READ;
         mKey.interestOps(newOps);
@@ -185,11 +192,12 @@ class NonBlockingConnection implements AsyncConnection {
 
         // Clean up all possible external references.
         mExternalOutBuffers = null;
+        mInBuffer = null;
         mOutBuffer = null;
 
         if (mPool != null) {
-            mInBufferEntry = mPool.release(mInBufferEntry);
-            mInBuffer = null;
+            mInBufferInternalEntry = mPool.release(mInBufferInternalEntry);
+            mInBufferInternal = null;
             mOutBufferInternalEntry = mPool.release(mOutBufferInternalEntry);
             mOutBufferInternal = null;
         }
@@ -201,8 +209,11 @@ class NonBlockingConnection implements AsyncConnection {
         mOnSendCallback = null;
     }
 
+    /**
+     * @return the internal recv buffer.
+     */
     public ByteBuffer getInBuffer() {
-        return mInBuffer;
+        return mInBufferInternal;
     }
 
     /**
@@ -218,16 +229,6 @@ class NonBlockingConnection implements AsyncConnection {
      * callbacks.
      */
     private void handleRead() throws IOException {
-        // Callbacks are triggered after every non-empty read.  Thus,
-        // it's safe to clear the buffer here for new data (rather than after
-        // the callback).
-        //
-        // In the common case, mInBuffer will not be cleared prior to this call,
-        // so it will not be wasted.
-        //
-        // Exceptions include the two len cases below the read, which are rare.
-        mInBuffer.clear();
-
         int len = mChan.read(mInBuffer);
         if (len == -1) {
             // Remote triggered EOF.  Bubble up to the user for handling.
@@ -250,13 +251,25 @@ class NonBlockingConnection implements AsyncConnection {
         // Save the callback so that it will persist even through cancelling.
         OnRecvCallback callback = mOnRecvCallback;
 
-        if (!mIsRecvPersistent) {
-            // Cancel selector interest first to yield to the callback.
-            cancelRecv();
+        if (mIsRecvPersistent) {
+            // INVARIANT: callback is not null.
+            callback.onRecv(this, mInBuffer);
+            if (mInBuffer != null) {
+                mInBuffer.clear();
+            }
+            return;
         }
+        // Otherwise, this is not a persistent callback.
 
-        // callback is never null per the INVARIANT.
-        callback.onRecv(this, mInBuffer);
+        // Save the buffer before cancelling the receive.
+        ByteBuffer buf = mInBuffer;
+
+        // Cancel selector interest first, just in case the callback issues
+        // a new recv().
+        cancelRecv();
+
+        // INVARIANT: callback is never null.
+        callback.onRecv(this, buf);
 
         // NOTE: we must be careful at this point, because the connection might
         // be closed as a result of the callback.  Thus, return immediately.
@@ -372,8 +385,8 @@ class NonBlockingConnection implements AsyncConnection {
     }
 
     /**
-     * Configures the connection for receiving data.  The callback will be
-     * called when new data is received.
+     * Configures the connection for receiving data using the internal
+     * in buffer.  The callback will be called when new data is received.
      *
      * This is not persistent.
      *
@@ -388,6 +401,16 @@ class NonBlockingConnection implements AsyncConnection {
      */
     @Override
     public void recv(OnRecvCallback callback) throws IllegalArgumentException {
+        mInBuffer = mInBufferInternal;
+        mInBuffer.clear();
+
+        recvImpl(callback, false);
+    }
+
+    @Override
+    public void recv(OnRecvCallback callback, ByteBuffer buf) {
+        // Buffer is not modified.
+        mInBuffer = buf;
         recvImpl(callback, false);
     }
 
@@ -440,6 +463,9 @@ class NonBlockingConnection implements AsyncConnection {
      */
     @Override
     public void recvPersistent(OnRecvCallback callback) throws IllegalArgumentException {
+        mInBuffer = mInBufferInternal;
+        mInBuffer.clear();
+
         recvImpl(callback, true);
     }
 
@@ -583,10 +609,10 @@ class NonBlockingConnection implements AsyncConnection {
      * Replaces the internal in buffer.
      */
     public void setInBufferInternal(ByteBuffer buf) {
-        if (mInBufferEntry != null) {
-            mInBufferEntry = mPool.release(mInBufferEntry);
+        if (mInBufferInternalEntry != null) {
+            mInBufferInternalEntry = mPool.release(mInBufferInternalEntry);
         }
-        mInBuffer = buf;
+        mInBufferInternal = buf;
     }
 
     /**

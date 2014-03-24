@@ -101,6 +101,42 @@ public class NonBlockingConnectionTest {
     }
 
     @Test
+    public void testRecvBuffer() throws IOException, InterruptedException {
+        // Pick something that fits within a single buffer.
+        final String expectedStr = makeTestString(128);
+        // Pick a smaller buffer that differs in size from the internal buffer.
+        final ByteBuffer extBuf = ByteBuffer.allocate(17);
+        // Test that onRecv does not clear the buf parameter.
+        extBuf.put((byte) 'a');
+
+        Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.recv(new AsyncConnection.OnRecvCallback() {
+                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
+                        try {
+                            assertEquals(extBuf.capacity(), buf.remaining());
+
+                            ByteBuffer cmpBuf = ByteBuffer.allocate(1024);
+                            cmpBuf.put(buf);
+                            cmpBuf.flip();
+
+                            assertTrue(!buf.hasRemaining());
+                            Helper.compare(cmpBuf, "a" + expectedStr.substring(0, extBuf.capacity() - 1));
+
+                            conn.close();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }, extBuf);
+            }
+        };
+
+        tester.run();
+    }
+
+    @Test
     public void testRecvSimple() throws IOException, InterruptedException {
         // Pick something that fits within a single buffer.
         final String expectedStr = makeTestString(128);
