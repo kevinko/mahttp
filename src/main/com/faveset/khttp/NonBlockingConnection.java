@@ -255,9 +255,8 @@ class NonBlockingConnection implements AsyncConnection {
             cancelRecv();
         }
 
-        if (callback != null) {
-            callback.onRecv(this, mInBuffer);
-        }
+        // callback is never null per the INVARIANT.
+        callback.onRecv(this, mInBuffer);
 
         // NOTE: we must be careful at this point, because the connection might
         // be closed as a result of the callback.  Thus, return immediately.
@@ -285,9 +284,8 @@ class NonBlockingConnection implements AsyncConnection {
             // case the callback decides to reconfigure a send.
             cancelSend();
 
-            if (callback != null) {
-                callback.onSend(this);
-            }
+            // callback is never null per the INVARIANT.
+            callback.onSend(this);
 
             // NOTE: the callback might close the connection as a result of
             // the callback.
@@ -311,9 +309,8 @@ class NonBlockingConnection implements AsyncConnection {
                 // actions can take precedence.
                 cancelSend();
 
-                if (callback != null) {
-                    callback.onSend(this);
-                }
+                // callback is never null per the INVARIANT.
+                callback.onSend(this);
 
                 // NOTE: the callback might close the connection.
             }
@@ -329,9 +326,8 @@ class NonBlockingConnection implements AsyncConnection {
         // actions can take precedence.
         cancelSend();
 
-        if (callback != null) {
-            callback.onSend(this);
-        }
+        // callback is never null per the INVARIANT.
+        callback.onSend(this);
 
         // NOTE: the callback might close the connection.
     }
@@ -385,13 +381,24 @@ class NonBlockingConnection implements AsyncConnection {
      * is only guaranteed for the life of the callback.
      *
      * The in buffer will also be cleared when the recv is performed.
+     *
+     * @param callback must not be null
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
     @Override
-    public void recv(OnRecvCallback callback) {
+    public void recv(OnRecvCallback callback) throws IllegalArgumentException {
         recvImpl(callback, false);
     }
 
-    private void recvImpl(OnRecvCallback callback, boolean isPersistent) {
+    /**
+     * @throws IllegalArgumentException if callback is null.
+     */
+    private void recvImpl(OnRecvCallback callback, boolean isPersistent) throws IllegalArgumentException {
+        if (callback == null) {
+            throw new IllegalArgumentException();
+        }
+
         if (mOnRecvCallback == null) {
             int newOps = mKey.interestOps() | SelectionKey.OP_READ;
             mKey.interestOps(newOps);
@@ -428,9 +435,11 @@ class NonBlockingConnection implements AsyncConnection {
     /**
      * A persistent version of recv.  The callback will remain scheduled
      * until the recv is cancelled with cancelRecv.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
     @Override
-    public void recvPersistent(OnRecvCallback callback) {
+    public void recvPersistent(OnRecvCallback callback) throws IllegalArgumentException {
         recvImpl(callback, true);
     }
 
@@ -452,9 +461,11 @@ class NonBlockingConnection implements AsyncConnection {
      * be called when the buffer is completely drained.  The buffer will not
      * be compacted, cleared, or otherwise modified.  The callback is not
      * persistent.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
     @Override
-    public void send(OnSendCallback callback) {
+    public void send(OnSendCallback callback) throws IllegalArgumentException {
         sendImpl(SendType.INTERNAL, mOutBufferInternal, callback);
     }
 
@@ -467,9 +478,11 @@ class NonBlockingConnection implements AsyncConnection {
      * progress, since the contents are not copied.
      *
      * @param callback will be called on completion.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
     @Override
-    public void send(OnSendCallback callback, ByteBuffer buf) {
+    public void send(OnSendCallback callback, ByteBuffer buf) throws IllegalArgumentException {
         sendImpl(SendType.EXTERNAL_SINGLE, buf, callback);
     }
 
@@ -479,9 +492,16 @@ class NonBlockingConnection implements AsyncConnection {
      *
      * @param bufsRemaining is the total number of bytes remaining for bufs.
      * Set to 0 to calculate automatically.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
     @Override
-    public void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining) {
+    public void send(OnSendCallback callback, ByteBuffer[] bufs,
+            long bufsRemaining) throws IllegalArgumentException {
+        if (callback == null) {
+            throw new IllegalArgumentException();
+        }
+
         mSendType = SendType.EXTERNAL_MULTIPLE;
         mExternalOutBuffers = bufs;
 
@@ -493,9 +513,7 @@ class NonBlockingConnection implements AsyncConnection {
 
         if (bufsRemaining == 0) {
             // We're done.
-            if (callback != null) {
-                callback.onSend(this);
-            }
+            callback.onSend(this);
             return;
         }
 
@@ -537,16 +555,21 @@ class NonBlockingConnection implements AsyncConnection {
      * @param type the SendType to use
      * @param buf
      * @param callback
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
-    private void sendImpl(SendType type, ByteBuffer buf, OnSendCallback callback) {
+    private void sendImpl(SendType type, ByteBuffer buf,
+            OnSendCallback callback) throws IllegalArgumentException {
+        if (callback == null) {
+            throw new IllegalArgumentException();
+        }
+
         mSendType = type;
         mOutBuffer = buf;
 
         if (!mOutBuffer.hasRemaining()) {
             // We're done.
-            if (callback != null) {
-                callback.onSend(this);
-            }
+            callback.onSend(this);
             return;
         }
 

@@ -705,4 +705,77 @@ public class NonBlockingConnectionTest {
 
         tester.run();
     }
+
+    private static Helper.ServerThread.Task makeNullTask() {
+        return new Helper.ServerThread.Task() {
+            public void run(Socket sock) {
+            }
+        };
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void testRecvNull() throws IOException, InterruptedException {
+        Tester tester = new Tester(makeNullTask(), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.recv(null);
+            }
+        };
+        tester.run();
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void testRecvPersistentNull() throws IOException, InterruptedException {
+        Tester tester = new Tester(makeNullTask(), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.recvPersistent(null);
+            }
+        };
+        tester.run();
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void testSendNull() throws IOException, InterruptedException {
+        Tester tester = new Tester(makeNullTask(), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.send(null);
+            }
+        };
+        tester.run();
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void testSendNull2() throws IOException, InterruptedException {
+        Tester tester = new Tester(makeNullTask(), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.send(null, null);
+            }
+        };
+        tester.run();
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void testSendNull3() throws IOException, InterruptedException {
+        Tester tester = new Tester(makeNullTask(), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.send(null, null, 0);
+            }
+        };
+        tester.run();
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void testSendPartialNull() throws IOException, InterruptedException {
+        Tester tester = new Tester(makeNullTask(), 1024) {
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.sendPartial(null);
+            }
+        };
+        tester.run();
+    }
 }
