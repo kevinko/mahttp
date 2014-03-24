@@ -229,6 +229,11 @@ class NonBlockingConnection implements AsyncConnection {
      * callbacks.
      */
     private void handleRead() throws IOException {
+        if (mIsRecvPersistent) {
+            handleReadPersistent();
+            return;
+        }
+
         int len = mChan.read(mInBuffer);
         if (len == -1) {
             // Remote triggered EOF.  Bubble up to the user for handling.
@@ -251,17 +256,8 @@ class NonBlockingConnection implements AsyncConnection {
         // Save the callback so that it will persist even through cancelling.
         OnRecvCallback callback = mOnRecvCallback;
 
-        if (mIsRecvPersistent) {
-            // INVARIANT: callback is not null.
-            callback.onRecv(this, mInBuffer);
-            if (mInBuffer != null) {
-                mInBuffer.clear();
-            }
-            return;
-        }
-        // Otherwise, this is not a persistent callback.
-
-        // Save the buffer before cancelling the receive.
+        // Save the buffer before cancelling the receive, since cancelRecv()
+        // nulls the buffer.
         ByteBuffer buf = mInBuffer;
 
         // Cancel selector interest first, just in case the callback issues
@@ -270,6 +266,32 @@ class NonBlockingConnection implements AsyncConnection {
 
         // INVARIANT: callback is never null.
         callback.onRecv(this, buf);
+
+        // NOTE: we must be careful at this point, because the connection might
+        // be closed as a result of the callback.  Thus, return immediately.
+    }
+
+    private void handleReadPersistent() throws IOException {
+        mInBuffer.clear();
+
+        int len = mChan.read(mInBuffer);
+        if (len == -1) {
+            // Remote triggered EOF.  Bubble up to the user for handling.
+            if (mOnCloseCallback != null) {
+                mOnCloseCallback.onClose(this);
+            }
+            return;
+        }
+        if (len == 0) {
+            // Wait for another round.
+            return;
+        }
+
+        // Ensure that the callback accesses the buffer contents from the start.
+        mInBuffer.flip();
+
+        // INVARIANT: callback is never null.
+        mOnRecvCallback.onRecv(this, mInBuffer);
 
         // NOTE: we must be careful at this point, because the connection might
         // be closed as a result of the callback.  Thus, return immediately.
@@ -459,12 +481,14 @@ class NonBlockingConnection implements AsyncConnection {
      * A persistent version of recv.  The callback will remain scheduled
      * until the recv is cancelled with cancelRecv.
      *
+     * The internal buffer will be cleared on each read from the network.
+     *
      * @throws IllegalArgumentException if callback is null.
      */
     @Override
     public void recvPersistent(OnRecvCallback callback) throws IllegalArgumentException {
         mInBuffer = mInBufferInternal;
-        mInBuffer.clear();
+        // mInBuffer will be cleared in handleReadPersistent.
 
         recvImpl(callback, true);
     }
