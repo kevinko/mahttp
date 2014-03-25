@@ -429,7 +429,6 @@ class NonBlockingConnection implements AsyncConnection {
         recvImpl(callback, false);
     }
 
-    @Override
     public void recv(OnRecvCallback callback, ByteBuffer buf) {
         // Buffer is not modified.
         mInBuffer = buf;

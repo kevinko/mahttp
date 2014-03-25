@@ -76,16 +76,6 @@ public interface AsyncConnection {
     void recv(OnRecvCallback callback);
 
     /**
-     * Configures the connection for receiving data into the given
-     * buffer, which may be the internal buffer.
-     *
-     * This is not persistent.
-     *
-     * The buffer will not be cleared prior to receiving data from the channel.
-     */
-    void recv(OnRecvCallback callback, ByteBuffer buf);
-
-    /**
      * A persistent version of recv.  The callback will remain scheduled
      * until the recv is cancelled with cancelRecv.
      */
