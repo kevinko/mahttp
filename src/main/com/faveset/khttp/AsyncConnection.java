@@ -30,7 +30,9 @@ public interface AsyncConnection {
     }
 
     /**
-     * Called when new data is received.  buf is the in buffer.
+     * Called when new data is received.  buf is the in buffer and will
+     * be positioned at the start of data to be read.  The callback must
+     * consume all content within the buffer (use it or lose it).
      */
     public interface OnRecvCallback {
         void onRecv(AsyncConnection conn, ByteBuffer buf);
