@@ -73,6 +73,8 @@ class NonBlockingConnection implements AsyncConnection {
         }
     };
 
+    // True if the receive buffer is never cleared by the NonBlockingConnection.
+    private boolean mIsRecvAppend;
     private boolean mIsRecvPersistent;
 
     private SendType mSendType;
@@ -141,6 +143,7 @@ class NonBlockingConnection implements AsyncConnection {
 
         // Reset to the initial state.
         mOnRecvCallback = null;
+        mIsRecvAppend = false;
         mIsRecvPersistent = false;
 
         mInBuffer = null;
@@ -272,7 +275,9 @@ class NonBlockingConnection implements AsyncConnection {
     }
 
     private void handleReadPersistent() throws IOException {
-        mInBuffer.clear();
+        if (!mIsRecvAppend) {
+            mInBuffer.clear();
+        }
 
         int len = mChan.read(mInBuffer);
         if (len == -1) {
@@ -429,16 +434,66 @@ class NonBlockingConnection implements AsyncConnection {
         recvImpl(callback, false);
     }
 
-    public void recv(OnRecvCallback callback, ByteBuffer buf) {
-        // Buffer is not modified.
+    /**
+     * This uses the internal in buffer by default.
+     * @throws IllegalArgumentException if callback is null.
+     */
+    public void recvAppend(OnRecvCallback callback) throws IllegalArgumentException {
+        recvAppend(callback, mInBufferInternal);
+    }
+
+    /**
+     * A variant of recv() that always appends to buf.  The user must take
+     * care to manage buf beforehand and within callback.
+     *
+     * This is not persistent.
+     *
+     * @param callback must not be null
+     * @param buf may be the internal ByteBuffer.
+     * @throws IllegalArgumentException if callback is null.
+     */
+    public void recvAppend(OnRecvCallback callback, ByteBuffer buf) throws IllegalArgumentException {
         mInBuffer = buf;
-        recvImpl(callback, false);
+        recvImpl(callback, false, true);
+    }
+
+    /**
+     * This uses the internal in buffer by default.
+     */
+    public void recvAppendPersistent(OnRecvCallback callback) throws IllegalArgumentException {
+        recvAppendPersistent(callback, mInBufferInternal);
+    }
+
+    /**
+     * A persistent version of recvAppend.  The callback will remain scheduled
+     * until the recv is cancelled with cancelRecv.
+     *
+     * The buffer will not be managed by NonBlockingConnection.  It
+     * is the responsibility of the callback to drain the buffer as needed.
+     *
+     * @throws IllegalArgumentException if callback is null.
+     */
+    public void recvAppendPersistent(OnRecvCallback callback,
+            ByteBuffer buf) throws IllegalArgumentException {
+        mInBuffer = buf;
+
+        recvImpl(callback, true, true);
+    }
+
+    /**
+     * mIsRecvAppend will be false.
+     *
+     * @throws IllegalArgumentException if callback is null.
+     */
+    private void recvImpl(OnRecvCallback callback, boolean isPersistent) throws IllegalArgumentException {
+        recvImpl(callback, isPersistent, false);
     }
 
     /**
      * @throws IllegalArgumentException if callback is null.
      */
-    private void recvImpl(OnRecvCallback callback, boolean isPersistent) throws IllegalArgumentException {
+    private void recvImpl(OnRecvCallback callback,
+            boolean isPersistent, boolean isAppend) throws IllegalArgumentException {
         if (callback == null) {
             throw new IllegalArgumentException();
         }
@@ -449,6 +504,7 @@ class NonBlockingConnection implements AsyncConnection {
         }
 
         mOnRecvCallback = callback;
+        mIsRecvAppend = isAppend;
         mIsRecvPersistent = isPersistent;
 
         // To minimize latency, try receiving immediately.

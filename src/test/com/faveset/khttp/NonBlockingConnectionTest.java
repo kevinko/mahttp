@@ -101,7 +101,7 @@ public class NonBlockingConnectionTest {
     }
 
     @Test
-    public void testRecvBuffer() throws IOException, InterruptedException {
+    public void testRecvAppend() throws IOException, InterruptedException {
         // Pick something that fits within a single buffer.
         final String expectedStr = makeTestString(128);
         // Pick a smaller buffer that differs in size from the internal buffer.
@@ -112,7 +112,7 @@ public class NonBlockingConnectionTest {
         Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
             @Override
             protected void prepareConn(NonBlockingConnection conn) {
-                conn.recv(new AsyncConnection.OnRecvCallback() {
+                conn.recvAppend(new AsyncConnection.OnRecvCallback() {
                     public void onRecv(AsyncConnection conn, ByteBuffer buf) {
                         try {
                             assertEquals(extBuf.capacity(), buf.remaining());
@@ -130,6 +130,72 @@ public class NonBlockingConnectionTest {
                         }
                     }
                 }, extBuf);
+            }
+        };
+
+        tester.run();
+    }
+
+    @Test
+    public void testRecvAppendPersistent() throws IOException, InterruptedException {
+        // Pick something that fits within a single buffer.
+        final String expectedStr = makeTestString(128);
+        // Pick a smaller buffer that differs in size from the internal buffer.
+        final ByteBuffer extBuf = ByteBuffer.allocate(17);
+        // Test that onRecv does not clear the buf parameter.
+        extBuf.put((byte) 'a');
+
+        Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
+            private int mRecvCount = 0;
+            private int mExpectedOffset = 0;
+
+            private AsyncConnection.OnRecvCallback makeRecvCallback() {
+                return new AsyncConnection.OnRecvCallback() {
+                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
+                        try {
+                            mRecvCount++;
+
+                            // Make sure that buf is fully utilized.
+                            assertEquals(extBuf.capacity(), buf.remaining());
+
+                            ByteBuffer cmpBuf = ByteBuffer.allocate(1024);
+                            cmpBuf.put(buf);
+                            cmpBuf.flip();
+
+                            assertTrue(!buf.hasRemaining());
+
+                            // Skip the first char.
+                            int len = extBuf.capacity() - 1;
+                            String cmp = "a" + expectedStr.substring(mExpectedOffset, mExpectedOffset + len);
+
+                            Helper.compare(cmpBuf, cmp);
+
+                            mExpectedOffset += len;
+
+                            if (mRecvCount == 1) {
+                                // Manipulate the buffer so that it starts
+                                // just after the first "a" for the next
+                                // (persistent) callback.
+                                buf.position(1);
+                            } else {
+                                conn.close();
+                            }
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                };
+            }
+
+            @Override
+            protected void finish() {
+                super.finish();
+                assertEquals(2, mRecvCount);
+            }
+
+            @Override
+            protected void prepareConn(NonBlockingConnection conn) {
+                conn.recvAppendPersistent(makeRecvCallback(), extBuf);
             }
         };
 
