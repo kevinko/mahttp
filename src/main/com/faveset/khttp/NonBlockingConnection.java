@@ -443,8 +443,8 @@ class NonBlockingConnection implements AsyncConnection {
     }
 
     /**
-     * A variant of recv() that always appends to buf.  The user must take
-     * care to manage buf beforehand and within callback.
+     * A variant of recv() that appends to buf but does not clear it.  The
+     * user must take care to manage buf beforehand and within callback.
      *
      * This is not persistent.
      *
