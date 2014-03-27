@@ -35,7 +35,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
     private SSLEngine mSSLEngine;
 
     // Start position for the incoming net buffer.  This allows for lazy
-    // compaction.
+    // compaction and partial SSL/TLS packets.
     private int mInNetBufferStart;
 
     // The internal in buffer that holds plaintext unwrapped from the SSLEngine.
@@ -52,8 +52,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
     // from the user that is directed to the network.
     private ByteBuffer mOutAppBufferInternal;
 
+    // TODO
     private AsyncConnection.OnCloseCallback mAppCloseCallback;
 
+    // TODO
     private AsyncConnection.OnErrorCallback mAppErrorCallback;
 
     // INVARIANT: This is always non-NULL when a recv() is scheduled.
@@ -61,6 +63,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
     private AsyncConnection.OnSendCallback mAppSendCallback;
 
+    // This signals an abrupt connection close.
     private AsyncConnection.OnCloseCallback mNetCloseCallback =
         new AsyncConnection.OnCloseCallback() {
             @Override
@@ -160,8 +163,60 @@ class SSLNonBlockingConnection implements AsyncConnection {
         // Clear possible external references.
         mOutAppBuffer = null;
 
+        // TODO: you should call wrap to flush handshaking data.  (maybe
+        // attempt to send over the nonblockingconnection and then cleanup
+        // with a dedicated callback.)
         mSSLEngine.closeInbound();
         mSSLEngine.closeOutbound();
+
+        mConn.close();
+    }
+
+    /**
+     * Flushes mInAppBuffer if unwrapCount is positive by calling
+     * mAppRecvCallback.  This respects the mCallbackHasRecv INVARIANT.
+     *
+     * mInAppBuffer will be cleared (i.e., prepared for another unwrap) if 0
+     * is returned.
+     *
+     * @return the new unwrapCount (0) or a negative value if unwrapping
+     * should stop because of connection close or a non-persistent receive.
+     */
+    private int flushInAppBuffer(int unwrapCount) {
+        if (unwrapCount <= 0) {
+            return unwrapCount;
+        }
+
+        // Otherwise, mInAppBuffer contains unwrapped data.  Try
+        // to drain it before attempting to unwrap again.
+        unwrapCount = 0;
+
+        // Always position the buffer at the start of the data
+        // for the callback.
+        mInAppBuffer.flip();
+
+        // Per the INVARIANT, the callback is always non-NULL
+        // when a recv() is scheduled.
+        mCallbackHasRecv = false;
+
+        mAppRecvCallback.onRecv(this, mInAppBuffer);
+        // NOTE: the callback might close the connection.
+
+        if (mIsClosed) {
+            // We're done.
+            return -1;
+        }
+
+        if (!mIsRecvPersistent && !mCallbackHasRecv) {
+            // Non-persistent receives must stop after the callback if a
+            // receive wasn't called again within the callback.
+            return -1;
+        }
+
+        // Else, prepare for another unwrap attempt.
+        mInAppBuffer.clear();
+
+        return unwrapCount;
     }
 
     @Override
@@ -182,9 +237,28 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * Called after NonBlockingConnection's recv() method returns data.
      * It unwraps SSL/TLS data from the network connection.
      *
-     * We always use the "Append" (recvAppend/recvAppendPersistent) forms
-     * of recv.  Thus, it is necessary to manage the net buffer explicitly
-     * after draining it.
+     * buf is not necessarily cleared at the start of each receive, since
+     * it might contain a partial SSL/TLS packet.  To handle this, we
+     * always use the "Append" (recvAppend/recvAppendPersistent) forms
+     * of recv when receiving net data.
+     *
+     * Thus, it is necessary to manage the net buffer explicitly
+     * after draining it.  To accomplish that:
+     *
+     * - At the start of this method
+     *     + buf.position() will be 0.
+     *     + mInNetBufferStart points to the actual start position of network
+     *       data that needs to be unwrapped based on the last call to
+     *       handleNetRecv.
+     *     + buf.limit() points to the end of the data read from the
+     *       NonBlockingConnection.
+     *
+     * - At the end of this method, we must ensure the following:
+     *     + mInNetBufferStart points to the start of all network data that
+     *       is yet to be unwrapped.
+     *     + buf.position() is the end of all data that is not yet unwrapped.
+     *       This way, new data will be appended.
+     *     + buf.limit() is set to capacity.
      */
     private void handleNetRecv(AsyncConnection conn, ByteBuffer buf) {
         // It is assumed that the app callback always fully drains its
@@ -204,8 +278,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
         // Tracks the number of successfully completed (OK) unwraps.  Set
         // to < 0 to stop unwrapping.
         //
-        // Since app buffer sizes are fixed integer sizes, this will never wrap
-        // around.
+        // Since the app buffer is of some integer size, this will never
+        // hit any integer limits.
         int unwrapCount = 0;
         do {
             // This unwraps a single SSL/TLS packet.
@@ -235,10 +309,17 @@ class SSLNonBlockingConnection implements AsyncConnection {
                     break;
             }
         } while (unwrapCount >= 0);
+
+        // Handle non-persistent receives.  Allow any receives scheduled within
+        // a callback to persist.
+        if (!mIsRecvPersistent && !mCallbackHasRecv) {
+            mConn.cancelRecv();
+        }
     }
 
     /**
-     * Handles an SSLEngineResult.Status.BUFFER_OVERFLOW.
+     * Handles an SSLEngineResult.Status.BUFFER_OVERFLOW, which indicates that
+     * We don't have enough space in mInAppBuffer for unwrapping.
      *
      * @param unwrapCount the number of successful unwraps since the last
      * time mAppRecvCallback was called.
@@ -249,8 +330,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * case, mInAppBuffer will be drained.
      */
     private int processSSLBufferOverflow(ByteBuffer buf, int unwrapCount) {
-        // We don't have enough space in mInAppBuffer for unwrapping.
-
         // See if the app buffer is completely empty, in which case
         // we need to resize it.
         if (mInAppBuffer.position() == 0) {
@@ -260,9 +339,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 int appSize = mSSLEngine.getSession().getApplicationBufferSize();
                 mInAppBuffer = allocate(appSize);
             } else {
-                // The buffer is empty but shorter for whatever
-                // reason.  This shouldn't happen, but clear it
-                // just in case it does.
+                // The buffer is empty but shorter than capacity for whatever
+                // reason.  This shouldn't happen, but clear it just in case
+                // it does.
                 mInAppBuffer.clear();
             }
 
@@ -272,35 +351,12 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
         // Otherwise, mInAppBuffer contains unwrapped data.  Try
         // to drain it before attempting to unwrap again.
-        unwrapCount = 0;
-
-        // Always position the buffer at the start of the data
-        // for the callback.
-        mInAppBuffer.flip();
-
-        // Per the INVARIANT, the callback is always non-NULL
-        // when a recv() is scheduled.
-        mCallbackHasRecv = false;
-        mAppRecvCallback.onRecv(this, mInAppBuffer);
-        // NOTE: the callback might close the connection.
-
-        if (mIsClosed) {
-            // We're done.
-            return -1;
-        } else if (!mIsRecvPersistent && !mCallbackHasRecv) {
-            // Non-persistent receives must stop after the callback.
-            return -1;
-        } else {
-            // Prepare for another unwrap attempt, which should
-            // now succeed with an empty app buffer.
-            mInAppBuffer.clear();
-        }
-
-        return unwrapCount;
+        return flushInAppBuffer(unwrapCount);
     }
 
     /**
-     * Handles an SSLEngineResult.Status.BUFFER_UNDERFLOW.
+     * Handles an SSLEngineResult.Status.BUFFER_UNDERFLOW.  Here, we lack
+     * sufficient data in the network in buffer to decode an SSL/TSL packet.
      *
      * @param unwrapCount the number of successful unwraps since the last
      * time mAppRecvCallback was called.
@@ -311,57 +367,56 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * connection is closed.  mInAppBuffer will be drained.
      */
     private int processSSLBufferUnderflow(ByteBuffer buf, int unwrapCount) {
-        if (unwrapCount > 0) {
-            // Flush the buffered application data.  There's no
-            // need to clear the app buffer, since we're done
-            // unwrapping until new net data arrives.
-            mInAppBuffer.flip();
-
-            // Maintain INVARIANT.
-            mCallbackHasRecv = false;
-            mAppRecvCallback.onRecv(this, mInAppBuffer);
-
-            // NOTE: the callback might close the connection at this
-            // point.
-            if (mIsClosed) {
-                return -1;
-            } else if (!mIsRecvPersistent && !mCallbackHasRecv) {
-                // Handle non-persistent receives.
-                return -1;
-            }
+        flushInAppBuffer(unwrapCount);
+        if (mIsClosed) {
+            // We can terminate early, since we'll no longer be using the
+            // engine now that the connection is done.
+            return -1;
         }
 
-        // Buffer size requirements might have changed, so check.
+        // Network buffer size requirements might have changed, so check.
         int netSize = mSSLEngine.getSession().getPacketBufferSize();
         if (netSize > buf.capacity()) {
             // Our network receive buffer is not large enough.  Resize it.
             ByteBuffer newInBuf = allocate(netSize);
 
-            // Preserve the already received packet data.
-            buf.flip();
-            // Ensure that we use the right starting point.
-            buf.position(mInNetBufferStart);
-
+            // Preserve the already received, but not unwrapped, packet data.
+            // This is just the range from the buf's current position to
+            // buf.limit().
+            //
+            // TODO: make sure that unwrap does not advance buf.  If it does,
+            // you'll need to copy from position mInNetBufferStart.
             newInBuf.put(buf);
             // The new incoming net buffer is aligned at 0.
             mInNetBufferStart = 0;
 
             mConn.setInBufferInternal(newInBuf);
-            // Now, continue appending net data into the buffer.
-        } else {
-            // Our buffer is correctly sized.  The SSL packet is fragmented
-            // so that we only have a partial copy of it.  This can be due
-            // to two reasons: 1) we haven't received enough data or
-            // 2) our buffer is full and not fully utilizing its space.
 
-            if (!buf.hasRemaining()) {
-                // This is 2).  Buffer is full and not utilizing its space.
-                buf.compact();
-                mInNetBufferStart = 0;
-            }
+            // Now, the buffer is prepared according to the description of
+            // handleNetRecv.  Continue appending net data into the buffer.
+            return -1;
         }
 
-        // More data is needed from the network.
+        // Our buffer is correctly sized.  The SSL packet is fragmented
+        // so that we only have a partial copy of it.  This can be due
+        // to two reasons: 1) we haven't received enough data or
+        // 2) our buffer is full and not fully utilizing its space.
+
+        if (!buf.hasRemaining()) {
+            // This is 2).  Buffer is full and not utilizing its space.
+            buf.compact();
+            mInNetBufferStart = 0;
+
+            // A compacted buffer is properly prepared according to the
+            // description of handleNetRecv.
+            return -1;
+        }
+
+        // Otherwise, prepare the buffer for appending to existing data
+        // according to the comments of handleNetRecv.
+        buf.position(buf.limit());
+        buf.limit(buf.capacity());
+
         return -1;
     }
 
@@ -376,23 +431,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * stop because the connection is closed.  mInAppBuffer will be drained.
      */
     private int processSSLClosed(ByteBuffer buf, int unwrapCount) {
-        // Flush any data, first.
-        if (unwrapCount > 0) {
-            // Flush the buffered application data.  There's no
-            // need to zero unwrapCount or clear the buffer,
-            // since done == true.
-            mInAppBuffer.flip();
-
-            // Maintain INVARIANT.
-            mCallbackHasRecv = false;
-            mAppRecvCallback.onRecv(this, mInAppBuffer);
-
-            // NOTE: the callback might close the connection at this
-            // point.
-            //
-            // We also don't care about rescheduled receives, since the
-            // connection is shutting down.
-        }
+        // Flush any data, first.  Ignore any receives that might occur
+        // within the callback, since we're shutting down.
+        flushInAppBuffer(unwrapCount);
 
         // Bubble up the close.
         if (mAppOnCloseCallback != null) {
@@ -404,7 +445,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     @Override
-    public void recv(OnRecvCallback callback) {
+    public void recv(OnRecvCallback callback) throws IllegalArgumentException {
+        if (callback == null) {
+            throw new IllegalArgumentException();
+        }
+
         mInNetBufferStart = 0;
 
         // Maintain INVARIANT.
@@ -414,6 +459,23 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mAppRecvCallback = callback;
 
         mConn.recv(mNetRecvCallback);
+    }
+
+    @Override
+    public void recvPersistent(OnRecvCallback callback) {
+        if (callback == null) {
+            throw new IllegalArgumentException();
+        }
+
+        mInNetBufferStart = 0;
+
+        // Maintain INVARIANT.
+        mCallbackHasRecv = true;
+
+        mIsRecvPersistent = true;
+        mAppRecvCallback = callback;
+
+        mConn.recvPersistent(mNetRecvCallback);
     }
 
     @Override
