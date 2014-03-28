@@ -12,7 +12,20 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLSession;
 
+/**
+ * NOTE: Versions of Android before 3.0 have flawed support for SSLEngine.
+ * This should only be used with Android 4.0+ targets.
+ *
+ * See https://code.google.com/p/android/issues/detail?id=12955
+ */
 class SSLNonBlockingConnection implements AsyncConnection {
+    private enum SendType {
+        INTERNAL,
+        INTERNAL_PARTIAL,
+        EXTERNAL_SINGLE,
+        EXTERNAL_MULTIPLE
+    }
+
     // Virtually all browsers support TLSv1.
     private static final String sSSLProtocol = "TLS";
 
@@ -44,13 +57,20 @@ class SSLNonBlockingConnection implements AsyncConnection {
     // minimum app buffer size for unwrapping.
     private ByteBuffer mInAppBuffer;
 
-    // Points to the active out buffer.
-    // INVARIANT: non-null when a send() is scheduled.
+    // The type of send requested by the application.
+    private SendType mSendType;
+
+    // Points to the active out buffer when mSendType is some sort of SINGLE
+    // buffer.
+    //
+    // INVARIANT: non-null when a SINGLE send() is scheduled.
     private ByteBuffer mOutAppBuffer;
 
     // The internal out buffer that applications can use.  This will hold data
     // from the user that is directed to the network.
     private ByteBuffer mOutAppBufferInternal;
+
+    private ByteBuffer[] mExternalOutAppBuffers;
 
     // TODO
     private AsyncConnection.OnCloseCallback mAppCloseCallback;
@@ -129,6 +149,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
         int appSize = session.getApplicationBufferSize();
         mInAppBuffer = allocate(appSize);
         mOutAppBufferInternal = allocate(appSize);
+
+        mSendType = SendType.SINGLE;
     }
 
     /**
@@ -286,15 +308,15 @@ class SSLNonBlockingConnection implements AsyncConnection {
             SSLEngineResult result = mSSLEngine.unwrap(buf, mInAppBuffer);
             switch (result.getStatus()) {
                 case SSLEngineResult.Status.BUFFER_OVERFLOW:
-                    unwrapCount = processSSLBufferOverflow(buf, unwrapCount);
+                    unwrapCount = unwrapSSLBufferOverflow(buf, unwrapCount);
                     break;
 
                 case SSLEngineResult.Status.BUFFER_UNDERFLOW:
-                    unwrapCount = processSSLBufferUnderflow(buf, unwrapCount);
+                    unwrapCount = unwrapSSLBufferUnderflow(buf, unwrapCount);
                     break;
 
                 case SSLEngineResult.Status.CLOSED:
-                    unwrapCount = processSSLBufferClosed(buf, unwrapCount);
+                    unwrapCount = unwrapSSLClosed(buf, unwrapCount);
                     break;
 
                 case SSLEngineResult.Status.OK:
@@ -318,6 +340,130 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     /**
+     * Continues wrapping and sending until all application data in
+     * mOutAppBuffer has been sent.
+     */
+    private void handleNetSend(AsyncConnection conn) {
+        if (mSendType == SendType.EXTERNAL_MULTIPLE) {
+            handleNetSendMultiple(conn);
+            return;
+        }
+
+        if (!mOutAppBuffer.hasRemaining()) {
+            // We're done wrapping and sending all data from the application.
+            // Notify the caller.  This callback is always non-null.
+            mAppSendCallback.onSend(this);
+            return;
+        }
+
+        // Otherwise, we need to wrap as much of the remainder as possible and
+        // schedule a new send.
+        ByteBuffer outBuf = mConn.getOutBuffer();
+        outBuf.clear();
+
+        boolean done = false;
+        do {
+            SSLEngineResult result = mSSLEngine.wrap(mOutAppBuffer, outBuf);
+            switch (result.getStatus()) {
+                case SSLEngineResult.Status.BUFFER_OVERFLOW:
+                    done = wrapSSLBufferOverflow(outBuf, wrapCount);
+                    break;
+
+                case SSLEngineResult.Status.BUFFER_UNDERFLOW:
+                    // This should never happen with wrap, since there's
+                    // always enough source data.
+                    //
+                    // Handle this gracefully by assuming that mOutAppBuffer
+                    // is now empty and that wrapping should stop.
+                    done = true;
+                    break;
+
+                case SSLEngineResult.Status.CLOSED:
+                    // Bubble up the close.
+                    if (mAppOnCloseCallback != null) {
+                        mAppOnCloseCallback.onClose(this);
+                    }
+
+                    done = true;
+                    break;
+
+                case SSLEngineResult.Status.OK:
+                    break;
+            }
+
+            if (!mOutAppBuffer.hasRemaining()) {
+                break;
+            }
+        } while (!done);
+
+        if (mIsClosed) {
+            // There's no point sending when closed.  Just quit.
+            return;
+        }
+
+        // Queue the outBuf for sending.
+        outBuf.flip();
+        mConn.send(mNetSendCallback);
+    }
+
+    private void handleNetSendMultiple(AsyncConnection conn) {
+        ByteBuffer[] srcs = mExternalOutAppBuffers.
+        ByteBufferArray srcArray = new ByteBufferArray(srcs);
+
+        if (srcArray.remaining() == 0) {
+            // We're done.  The callback is always non-null.
+            mAppSendCallback.onSend(this);
+            return;
+        }
+
+        ByteBuffer outBuf = mConn.getOutBuffer();
+        outBuf.clear();
+
+        boolean done = false;
+        do {
+            SSLEngineResult result = mSSLEngine.wrap(srcs,
+                    srcArray.getNonEmptyOffset(), srcs.length, outBuf);
+            switch (result.getStatus()) {
+                case SSLEngineResult.Status.BUFFER_OVERFLOW:
+                    done = wrapSSLBufferOverflow(outBuf, wrapCount);
+                    break;
+
+                case SSLEngineResult.Status.BUFFER_UNDERFLOW:
+                    // Handle this gracefully by assuming that srcBuffers
+                    // is now empty and that wrapping should stop.
+                    done = true;
+                    break;
+
+                case SSLEngineResult.Status.CLOSED:
+                    // Bubble up the close.
+                    if (mAppOnCloseCallback != null) {
+                        mAppOnCloseCallback.onClose(this);
+                    }
+
+                    done = true;
+                    break;
+
+                case SSLEngineResult.Status.OK:
+                    break;
+            }
+
+            srcArray.update();
+            if (srcArray.remaining() == 0) {
+                // Nothing more to wrap.
+                break;
+            }
+        } while (!done);
+
+        if (mIsClosed) {
+            return;
+        }
+
+        // Flush the out buffer.
+        outBuf.flip();
+        mConn.send(mNetSendCallback);
+    }
+
+    /**
      * Handles an SSLEngineResult.Status.BUFFER_OVERFLOW, which indicates that
      * We don't have enough space in mInAppBuffer for unwrapping.
      *
@@ -329,7 +475,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * data is needed from the network or 2) the connection is closed.  In that
      * case, mInAppBuffer will be drained.
      */
-    private int processSSLBufferOverflow(ByteBuffer buf, int unwrapCount) {
+    private int unwrapSSLBufferOverflow(ByteBuffer buf, int unwrapCount) {
         // See if the app buffer is completely empty, in which case
         // we need to resize it.
         if (mInAppBuffer.position() == 0) {
@@ -366,7 +512,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * stop because: 1) more data is needed from the network or 2) the
      * connection is closed.  mInAppBuffer will be drained.
      */
-    private int processSSLBufferUnderflow(ByteBuffer buf, int unwrapCount) {
+    private int unwrapSSLBufferUnderflow(ByteBuffer buf, int unwrapCount) {
         flushInAppBuffer(unwrapCount);
         if (mIsClosed) {
             // We can terminate early, since we'll no longer be using the
@@ -383,9 +529,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
             // Preserve the already received, but not unwrapped, packet data.
             // This is just the range from the buf's current position to
             // buf.limit().
-            //
-            // TODO: make sure that unwrap does not advance buf.  If it does,
-            // you'll need to copy from position mInNetBufferStart.
             newInBuf.put(buf);
             // The new incoming net buffer is aligned at 0.
             mInNetBufferStart = 0;
@@ -430,7 +573,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * was called.  This is always negative to indicate that looping should
      * stop because the connection is closed.  mInAppBuffer will be drained.
      */
-    private int processSSLClosed(ByteBuffer buf, int unwrapCount) {
+    private int unwrapSSLClosed(ByteBuffer buf, int unwrapCount) {
         // Flush any data, first.  Ignore any receives that might occur
         // within the callback, since we're shutting down.
         flushInAppBuffer(unwrapCount);
@@ -496,5 +639,33 @@ class SSLNonBlockingConnection implements AsyncConnection {
      */
     public void setClientMode(boolean isClient) {
         mSSLEngine.setUseClientMode(isClient);
+    }
+
+    /**
+     * Handles an SSLEngineResult.Status.BUFFER_OVERFLOW when wrapping, which
+     * indicates that We don't have enough space in buf for wrapping.
+     *
+     * @param outBuf the outgoing network buffer.
+     * @param wrapCount the number of successful wraps since the last
+     * time mAppSendCallback was called.
+     *
+     * @return true if looping should stop because:
+     * 1) data needs to be sent to the network or 2) the connection is
+     * closed.
+     */
+    private boolean wrapSSLBufferOverflow(ByteBuffer outBuf, int wrapCount) {
+        // Check that the capacity was not changed.
+        int netSize = mSSLEngine.getSession().getPacketBufferSize();
+        if (outbuf.capacity() < netSize) {
+            outBuf = allocate(netSize);
+            mConn.setOutBufferInternal(outBuf);
+
+            // Now, retry with the larger buffer.
+            return false;
+        }
+
+        // Otherwise, stop so that we can sending to the network to drain
+        // outBuf.
+        return true;
     }
 }
