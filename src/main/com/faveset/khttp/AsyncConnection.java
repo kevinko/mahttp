@@ -72,14 +72,18 @@ public interface AsyncConnection {
      * is only guaranteed for the life of the callback.
      *
      * The in buffer will also be cleared when the recv is performed.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
-    void recv(OnRecvCallback callback);
+    void recv(OnRecvCallback callback) throws IllegalArgumentException;
 
     /**
      * A persistent version of recv.  The callback will remain scheduled
      * until the recv is cancelled with cancelRecv.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
-    void recvPersistent(OnRecvCallback callback);
+    void recvPersistent(OnRecvCallback callback) throws IllegalArgumentException;
 
     /**
      * Schedules the contents of the out buffer for sending.  Callback will
