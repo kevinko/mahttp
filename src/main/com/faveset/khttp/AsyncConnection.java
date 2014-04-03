@@ -90,8 +90,10 @@ public interface AsyncConnection {
      * be called when the buffer is completely drained.  The buffer will not
      * be compacted, cleared, or otherwise modified.  The callback is not
      * persistent.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
-    void send(OnSendCallback callback);
+    void send(OnSendCallback callback) throws IllegalArgumentException;
 
     /**
      * A variant of send that uses the contents of buf instead of the built-in
@@ -102,8 +104,10 @@ public interface AsyncConnection {
      * progress, since the contents are not copied.
      *
      * @param callback will be called on completion.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
-    void send(OnSendCallback callback, ByteBuffer buf);
+    void send(OnSendCallback callback, ByteBuffer buf) throws IllegalArgumentException;
 
     /**
      * A variant of send() that sends an array of ByteBuffers.  The callback
@@ -111,8 +115,10 @@ public interface AsyncConnection {
      *
      * @param bufsRemaining is the total number of bytes remaining for bufs.
      * Set to 0 to calculate automatically.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
-    void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining);
+    void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining) throws IllegalArgumentException;
 
     /**
      * Schedules the contents of the out buffer for sending.  Callback will
@@ -122,8 +128,10 @@ public interface AsyncConnection {
      *
      * If a send is called during the callback, it will take priority over
      * whatever remains in the internal buffer.
+     *
+     * @throws IllegalArgumentException if callback is null.
      */
-    void sendPartial(OnSendCallback callback);
+    void sendPartial(OnSendCallback callback) throws IllegalArgumentException;
 
     /**
      * Configures the callback that will be called when the connection is
