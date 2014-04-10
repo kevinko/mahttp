@@ -35,6 +35,17 @@ class ByteBufferArray {
         return mNonEmptyOffset;
     }
 
+    public boolean hasRemaining() {
+        return (mRemaining != 0);
+    }
+
+    /**
+     * @return the number of ByteBuffers in the underlying array.
+     */
+    public int length() {
+        return mBufs.length;
+    }
+
     /**
      * @return the number of remaining bytes in the buffer array since the last
      * update().
