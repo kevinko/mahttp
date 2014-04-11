@@ -729,7 +729,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
             throw new IllegalArgumentException();
         }
 
-        mInNetBufferStart = 0;
         mRecvType = RecvType.SIMPLE;
         mAppRecvCallback = callback;
 
@@ -743,7 +742,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
             throw new IllegalArgumentException();
         }
 
-        mInNetBufferStart = 0;
         mRecvType = RecvType.PERSISTENT;
         mAppRecvCallback = callback;
 
