@@ -174,6 +174,16 @@ class SSLNonBlockingConnection implements AsyncConnection {
             }
         };
 
+    // This should be scheduled after executor tasks to signal completion
+    // and restore any paused events.
+    private Runnable mTaskDoneCallback =
+        new Runnable() {
+            @Override
+            public void run() {
+                onTaskDone();
+            }
+        };
+
     /**
      * @param selector
      * @param chan
@@ -267,52 +277,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     /**
-     * @param status
-     * @param onreadyTask this will be scheduled for running in the event
-     * thread after any queued tasks are completed.  It should be used for
-     * initiating handshake wrap or unwrap events, depending on the context.
-     * For optimal performance, this must not block.
-     *
-     * @return false if handshaking is awaiting completion of a task (i.e.,
-     * true if event handling can proceed).  In this case, the caller should
-     * suspend all events.  onReadyTask will be called in the event loop's
-     * thread context when ready.
-     */
-    private boolean checkHandshake(SSLEngineResult.HandshakeStatus status, Runnable onReadyTask) {
-        switch (status) {
-            case NEED_TASK:
-                boolean hasTask = false;
-                do {
-                    Runnable task = mSSLEngine.getDelegatedTask();
-                    if (task == null) {
-                        break;
-                    }
-                    sSerialWorkerExecutor.execute(task);
-                    hasTask = true;
-                } while (true);
-
-                if (hasTask) {
-                    // Re-schedule after tasks have completed.
-                    sSerialWorkerExecutor.execute(onReadyTask);
-                }
-
-                return false;
-
-            case NEED_UNWRAP:
-                unwrapHandshake();
-                return true;
-
-            case NEED_WRAP:
-                wrapHandshake();
-                return true;
-
-            case FINISHED:
-            case NOT_HANDSHAKING:
-                return true;
-        }
-    }
-
-    /**
      * This performs a graceful closure.  Final close-related handshaking will
      * need to proceed via wrap/unwrap SSLEngine calls.
      */
@@ -321,7 +285,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mSSLEngine.closeInbound();
         mSSLEngine.closeOutbound();
 
-        wrapHandshake();
+        // We don't check the return, since we never go back to the active state
+        // after close.
+        stepHandshake(mSSLEngine.getHandshakeStatus());
     }
 
     /**
@@ -377,152 +343,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     /**
-     * Called after NonBlockingConnection's recv() method returns data.
-     * It unwraps SSL/TLS data from the network connection.
-     *
-     * buf is not necessarily cleared at the start of each receive, since
-     * it might contain a partial SSL/TLS packet.  To handle this, we
-     * always use the "Append" (recvAppend/recvAppendPersistent) forms
-     * of recv when receiving net data.
-     *
-     * Thus, it is necessary to manage the net buffer explicitly
-     * after draining it.  To accomplish that:
-     *
-     * - At the start of this method
-     *     + buf.position() will be 0.
-     *     + mInNetBufferStart points to the actual start position of network
-     *       data that needs to be unwrapped based on the last call to
-     *       handleNetRecv.
-     *     + buf.limit() points to the end of the data read from the
-     *       NonBlockingConnection.
-     *
-     * - At the end of this method, we must ensure the following:
-     *     + mInNetBufferStart points to the start of all network data that
-     *       is yet to be unwrapped.
-     *     + buf.position() is the end of all data that is not yet unwrapped.
-     *       This way, new data will be appended.
-     *     + buf.limit() is set to capacity.
-     */
-    private void handleNetRecv(AsyncConnection conn, ByteBuffer buf) {
-        // It is assumed that the app callback always fully drains its
-        // buffer argument.
-        mInAppBuffer.clear();
-
-        if (!unwrap(mUnwrapHandshakeTask)) {
-            // handleNetRecv() is possibly called as part of a persistent
-            // receive.  Stop receiving until the handshake task is signaled.
-            mConn.cancelRecv();
-            return;
-        }
-
-        // Stop non-persistent receives.  mRecvType always holds the current
-        // receive type, which will allow any receives scheduled within
-        // a callback to persist.
-        if (mRecvType == RecvType.NONE) {
-            mConn.cancelRecv();
-        }
-    }
-
-    /**
-     * Handles send completion of outgoing application data by calling the
-     * application's send callback.
-     *
-     * This takes care to handle any sends that may be nested in the callback.
-     *
-     * @param conn the AsyncConnection passed to handleNetSend.
-     * @param appSendCallback must not be null.
-     */
-    private void handleNetSendDone(AsyncConnection conn,
-            AsyncConnection.OnSendCallback appSendCallback) {
-        // We're done sending everything requested by the app.  Signal
-        // the callback.
-
-        // See if the callback performs any nested sends.
-        SendType currSendType = mSendType;
-
-        appSendCallback.onSend(this);
-
-        SendType newSendType = mSendType;
-
-        if (newSendType == SendType.MULTIPLE) {
-            wrapMultiple();
-            return;
-        }
-
-        if (newSendType == SendType.NONE) {
-            // No callback occurred.  See if we need to attempt wrapping.
-            // TODO
-            if (mSSLEngine.getHandshakeStatus() != SSLEngineResult.HandshakeStatus.NEED_WRAP) {
-                // We can stop right here.
-                cancelSend();
-                return;
-            }
-
-            wrapHandshake();
-            return;
-        }
-
-        // Otherwise, we have some sort of single send.
-        wrapSingle();
-        return;
-    }
-
-    /**
-     * Continues wrapping and sending until all application data in
-     * mOutAppBuffer has been sent.
-     */
-    private void handleNetSend(AsyncConnection conn) {
-        // We're done sending everything in the outgoing network buffer.
-        mConn.getOutBuffer().clear();
-
-        if (mSendType == SendType.MULTIPLE) {
-            handleNetSendMultiple(conn);
-            return;
-        }
-        // TODO: do you need to check for any pending tasks?
-
-        // handleNetSend() occurs whenever an outgoing network buffer is
-        // flushed.  The network buffer might contain handshake data or
-        // wrapped outgoing app data.  In the latter case, we must issue
-        // the send callback if all app data is sent to indicate send
-        // completion.
-        if (mAppSendCallback != null && !mOutAppBuffer.hasRemaining()) {
-            handleNetSendDone(conn, mAppSendCallback);
-            return;
-        }
-
-        wrapSingle();
-    }
-
-    private void handleNetSendMultiple(AsyncConnection conn) {
-        if (mAppSendCallback != null && srcArray.remaining() == 0) {
-            SendType currSendType = mSendType;
-
-            mAppSendCallback.onSend(this);
-
-            SendType newSendType = mSendType;
-
-            if (newSendType != SendType.MULTIPLE && newSendType != SendType.NONE) {
-                wrapSingle();
-                return;
-            }
-            // Else, we have no send or a multiple send.
-
-            if (newSendType == SendType.NONE) {
-                // We don't have any further application sends.  See if
-                // the engine still needs to unwrap.
-                if (mSSLEngine.getHandshakeStatus() != SSLEngineResult.HandshakeStatus.NEED_WRAP) {
-                    // We can stop right here.
-                    return;
-                }
-            }
-            return;
-        }
-
-        wrapMultiple();
-    }
-
-    /**
      * Handles an SSLEngineResult.Status.CLOSED.  The connection will be
      * closed immediately.
      */
@@ -535,6 +355,44 @@ class SSLNonBlockingConnection implements AsyncConnection {
         // The engine has signaled completion, so there is nothing
         // left to do.
         closeImmediately();
+    }
+
+    /**
+     * @return true if wrapping should stop for the time being.  An event will
+     * be scheduled in such a case.
+     */
+    private boolean handleStepActiveWrapResult(SSLEngineResult result) {
+        switch (result.getStatus()) {
+            case BUFFER_OVERFLOW:
+                // This call can change the out buffer if the SSLEngine
+                // demands a change in buffer size.
+                boolean needsSend = handleWrapOverflow();
+                if (needsSend) {
+                    ByteBuffer outBuf = mConn.getOutBuffer();
+                    outBuf.flip();
+                    mConn.send(mActiveNetSendCallback);
+                    return true;
+                }
+
+                break;
+
+            case BUFFER_UNDERFLOW:
+                // We're out of application data.  Send to the network.
+                // The application callback will be triggered on completion.
+                ByteBuffer outBuf = mConn.getOutBuffer();
+                outBuf.flip();
+                mConn.send(mActiveNetSendCallback);
+                return true;
+
+            case CLOSED:
+                handleEngineClose();
+                return true;
+
+            case OK:
+                break;
+        }
+
+        return false;
     }
 
     /**
@@ -655,6 +513,32 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
     /**
      * Handles receive completion callbacks while in the active state.
+     *
+     * Called after NonBlockingConnection's recv() method returns data.
+     * It unwraps SSL/TLS data from the network connection.
+     *
+     * buf is not necessarily cleared at the start of each receive, since
+     * it might contain a partial SSL/TLS packet.  To handle this, we
+     * always use the "Append" (recvAppend/recvAppendPersistent) forms
+     * of recv when receiving net data.
+     *
+     * Thus, it is necessary to manage the net buffer explicitly
+     * after draining it.  To accomplish that:
+     *
+     * - At the start of this method
+     *     + buf.position() will be 0.
+     *     + mInNetBufferStart points to the actual start position of network
+     *       data that needs to be unwrapped based on the last call to
+     *       handleNetRecv.
+     *     + buf.limit() points to the end of the data read from the
+     *       NonBlockingConnection.
+     *
+     * - At the end of this method, we must ensure the following:
+     *     + mInNetBufferStart points to the start of all network data that
+     *       is yet to be unwrapped.
+     *     + buf.position() is the end of all data that is not yet unwrapped.
+     *       This way, new data will be appended.
+     *     + buf.limit() is set to capacity.
      */
     private void onActiveNetRecv(AsyncConnection conn, ByteBuffer bufArg) {
         do {
@@ -1170,44 +1054,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     /**
-     * @return true if wrapping should stop for the time being.  An event will
-     * be scheduled in such a case.
-     */
-    private boolean handleStepActiveWrapResult(SSLEngineResult result) {
-        switch (result.getStatus()) {
-            case BUFFER_OVERFLOW:
-                // This call can change the out buffer if the SSLEngine
-                // demands a change in buffer size.
-                boolean needsSend = handleWrapOverflow();
-                if (needsSend) {
-                    ByteBuffer outBuf = mConn.getOutBuffer();
-                    outBuf.flip();
-                    mConn.send(mActiveNetSendCallback);
-                    return true;
-                }
-
-                break;
-
-            case BUFFER_UNDERFLOW:
-                // We're out of application data.  Send to the network.
-                // The application callback will be triggered on completion.
-                ByteBuffer outBuf = mConn.getOutBuffer();
-                outBuf.flip();
-                mConn.send(mActiveNetSendCallback);
-                return true;
-
-            case CLOSED:
-                handleEngineClose();
-                return true;
-
-            case OK:
-                break;
-        }
-
-        return false;
-    }
-
-    /**
      * @return true if handshaking is finished.  False if handshaking is still
      * in progress.  In that case, events will be scheduled to allow for
      * progress.
@@ -1355,404 +1201,5 @@ class SSLNonBlockingConnection implements AsyncConnection {
         } while (true);
 
         return false;
-    }
-
-    /**
-     * Unwraps the contents of mConn's in buffer from the starting position
-     * mInNetBufferStart.
-     *
-     * mInNetBufferStart will be updated as unwrapping proceeds.
-     *
-     * @param onReadyTask will be called in the event loop when SSL handshaking
-     * is ready to proceed.
-     *
-     * @return false if event handling should be paused because of SSL
-     * handshaking.
-     */
-    private boolean unwrap(Runnable onReadyTask) {
-        ByteBuffer buf = mConn.getInBuffer();
-        buf.position(mInNetBufferStart);
-
-        // We continually build up mInAppBuffer by unwrapping until we get
-        // CLOSE/UNDERFLOW/OVERFLOW.  Then, issue the callback to maximize the
-        // amount of data passed to the callback.
-
-        // Tracks the number of successfully completed (OK) unwraps.  Set
-        // to < 0 to stop unwrapping.
-        //
-        // Since the app buffer is of some integer size, this counter will never
-        // hit any integer limits.
-        int unwrapCount = 0;
-        do {
-            // This unwraps a single SSL/TLS packet.
-            SSLEngineResult result = mSSLEngine.unwrap(buf, mInAppBuffer);
-            switch (result.getStatus()) {
-                case SSLEngineResult.Status.BUFFER_OVERFLOW:
-                    unwrapCount = unwrapBufferOverflow(buf, unwrapCount);
-                    break;
-
-                case SSLEngineResult.Status.BUFFER_UNDERFLOW:
-                    unwrapCount = unwrapBufferUnderflow(buf, unwrapCount);
-                    break;
-
-                case SSLEngineResult.Status.CLOSED:
-                    unwrapCount = unwrapClosed(buf, unwrapCount);
-                    break;
-
-                case SSLEngineResult.Status.OK:
-                    // Continue unwrapping, since we want to minimize
-                    // the number of callbacks to the application
-                    // by maximizing buffer usage.
-                    unwrapCount++;
-
-                    // The engine has updated buf's pointers, since we've read
-                    // a packet, so track the changes.
-                    mInNetBufferStart = buf.position();
-
-                    if (!checkHandshake(result.getHandshakeStatus(), onReadyTask)) {
-                        // Processing cannot proceed because of handshaking.
-                        return false;
-                    }
-                    break;
-            }
-        } while (unwrapCount >= 0);
-
-        return true;
-    }
-
-    /**
-     * Flushes mInAppBuffer if unwrapCount is positive by calling
-     * mAppRecvCallback.  Any receive methods called by the callback will
-     * affect mRecvType.
-     *
-     * mInAppBuffer will be cleared (i.e., prepared for another unwrap) if 0
-     * is returned.
-     *
-     * @return the new unwrapCount (0) or a negative value if unwrapping
-     * should stop because of connection close or a non-persistent receive.
-     */
-    private int unwrapFlushInAppBuffer(int unwrapCount) {
-        if (unwrapCount <= 0) {
-            return unwrapCount;
-        }
-
-        // Otherwise, mInAppBuffer contains unwrapped data.  Try
-        // to drain it before attempting to unwrap again.
-
-        // Always position the buffer at the start of the data
-        // for the callback.
-        mInAppBuffer.flip();
-
-        // Save mRecvType, since the callback may change it indirectly.
-        RecvType currRecvType = mRecvType;
-
-        // Detect any nested calls to a recv() method.
-        mRecvType = RecvType.NONE;
-
-        // This possibly updates mRecvType if a recv() method is called.
-        mAppRecvCallback.onRecv(this, mInAppBuffer);
-        // NOTE: the callback might close the connection.  However, close()
-        // is graceful and involves further handshaking, so we need not worry
-        // about stopping immediately here.
-
-        // mRecvType might be updated by recv().
-        RecvType newRecvType = mRecvType;
-        mRecvType = currRecvType;
-
-        if (currRecvType == RecvType.PERSISTENT) {
-            // Let any nested recv() call take priority.
-            if (newRecvType != RecvType.NONE) {
-                mRecvType = newRecvType;
-            }
-            // Otherwise, continue unwrapping, since the receive is persistent.
-        } else {
-            // See if a recv() call occurred within the callback, which would
-            // require that we continue unwrapping for another interval.
-
-            if (newRecvType == RecvType.NONE) {
-                // We've finished one round of receives and nothing further
-                // is requested by the application.
-                return -1;
-            }
-
-            // Otherwise, some sort of receive was requested by the callback.
-            mRecvType = newRecvType;
-        }
-
-        // Prepare for another unwrap attempt.
-        mInAppBuffer.clear();
-
-        // We've flushed the app buffer via the callback.  Thus, reset the
-        // unwrap count.
-        return 0;
-    }
-
-    /**
-     * Handles an SSLEngineResult.Status.BUFFER_UNDERFLOW.  Here, we lack
-     * sufficient data in the network in buffer to decode an SSL/TSL packet.
-     *
-     * @param unwrapCount the number of successful unwraps since the last
-     * time mAppRecvCallback was called.
-     *
-     * @return the new unwrapCount, since the last time mAppRecvCallback
-     * was called.  This is always negative to indicate that looping should
-     * stop because: 1) more data is needed from the network or 2) the
-     * connection is closed.  mInAppBuffer will be drained.
-     */
-    private int unwrapBufferUnderflow(ByteBuffer buf, int unwrapCount) {
-        unwrapFlushInAppBuffer(unwrapCount);
-        if (mIsClosed) {
-            // We can terminate early, since we'll no longer be using the
-            // engine now that the connection is done.
-            return -1;
-        }
-
-        // Network buffer size requirements might have changed, so check.
-        int netSize = mSSLEngine.getSession().getPacketBufferSize();
-        if (netSize > buf.capacity()) {
-            // Our network receive buffer is not large enough.  Resize it.
-            ByteBuffer newInBuf = allocate(netSize);
-
-            // Preserve the already received, but not unwrapped, packet data.
-            // This is just the range from the buf's current position to
-            // buf.limit().
-            newInBuf.put(buf);
-            // The new incoming net buffer is aligned at 0.
-            mInNetBufferStart = 0;
-
-            mConn.setInBufferInternal(newInBuf);
-
-            // Now, the buffer is prepared according to the description of
-            // handleNetRecv.  Continue appending net data into the buffer.
-            return -1;
-        }
-
-        // Our buffer is correctly sized.  The SSL packet is fragmented
-        // so that we only have a partial copy of it.  This can be due
-        // to two reasons: 1) we haven't received enough data or
-        // 2) our buffer is full and not fully utilizing its space.
-
-        if (!buf.hasRemaining()) {
-            // This is 2).  Buffer is full and not utilizing its space.
-            buf.compact();
-            mInNetBufferStart = 0;
-
-            // A compacted buffer is properly prepared according to the
-            // description of handleNetRecv.
-            return -1;
-        }
-
-        // Otherwise, prepare the buffer for appending to existing data
-        // according to the comments of handleNetRecv.
-        buf.position(buf.limit());
-        buf.limit(buf.capacity());
-
-        return -1;
-    }
-
-    /**
-     * Handles an SSLEngineResult.Status.CLOSED.
-     *
-     * @param unwrapCount the number of successful unwraps since the last
-     * time mAppRecvCallback was called.
-     *
-     * @return the new unwrapCount, since the last time mAppRecvCallback
-     * was called.  This is always negative to indicate that looping should
-     * stop because the connection is closed.  mInAppBuffer will be drained.
-     */
-    private int unwrapClosed(ByteBuffer buf, int unwrapCount) {
-        // Flush any data, first.  Ignore any receives that might occur
-        // within the callback, since we're shutting down.
-        unwrapFlushInAppBuffer(unwrapCount);
-
-        // Bubble up the close.
-        if (mAppOnCloseCallback != null) {
-            mAppOnCloseCallback.onClose(this);
-        }
-
-        // Connection is closed.
-        return -1;
-    }
-
-    /**
-     * Attempts to unwrap handshaking data.  This does nothing if a receive
-     * is already scheduled, since the receive will implicitly handle
-     * handshaking.
-     */
-    private void unwrapHandshake() {
-        if (mRecvType != RecvType.NONE) {
-            // A receive is in progress, which will take care of handshaking.
-            return;
-        }
-
-        mInAppBuffer.clear();
-        mAppRecvCallback = null;
-        mRecvType = RecvType.HANDSHAKE;
-
-        if (unwrap(mWrapHandshakeTask)) {
-            // Handshaking isn't paused, so it's safe to reconfigure the
-            // persistent receive for future unwrapping.
-            mConn.recvPersistent(mNetRecvCallback);
-        }
-    }
-
-    /**
-     * Attempts to wrap handshaking data from the SSLEngine, and send it to the
-     * network.
-     *
-     * This does nothing if a send is already in progress, because the send
-     * will automatically wrap handshaking information.
-     */
-    private void wrapHandshake() {
-        if (mSendType != SendType.NONE) {
-            // A send is already in progress.  Do nothing, since the send
-            // will take care of handshaking.
-            return;
-        }
-
-        mSendType = SendType.HANDSHAKE;
-        mAppSendCallback = null;
-        // Prepare empty outgoing application data to signal that we just want
-        // to attempt handshaking.
-        mOutAppBuffer.clear();
-
-        wrapSingle();
-    }
-
-    /**
-     * @param onReadyTask will be called in the event loop when SSL handshaking
-     * is ready to proceed.
-     *
-     * @return false if event handling should be paused because of SSL
-     * handshaking.
-     */
-    private void wrapMultiple(Runnable onReadyTask) {
-        // Prepare the outgoing network buffer.
-        ByteBuffer outBuf = mConn.getOutBuffer();
-        outBuf.clear();
-
-        ByteBufferArray src = mOutAppBuffersExternal;
-
-        boolean done = false;
-        do {
-            ByteBuffer[] srcBufs = src.getBuffers();
-            SSLEngineResult result = mSSLEngine.wrap(srcBufs,
-                    src.getNonEmptyOffset(), srcBufs.length, outBuf);
-            switch (result.getStatus()) {
-                case SSLEngineResult.Status.BUFFER_OVERFLOW:
-                    done = wrapOverflow(outBuf, wrapCount);
-                    break;
-
-                case SSLEngineResult.Status.BUFFER_UNDERFLOW:
-                    // We're done wrapping.  Send everything to the network.
-                    done = true;
-                    break;
-
-                case SSLEngineResult.Status.CLOSED:
-                    // Bubble up the close.
-                    if (mAppOnCloseCallback != null) {
-                        mAppOnCloseCallback.onClose(this);
-                    }
-
-                    closeImmediately();
-
-                    return;
-
-                case SSLEngineResult.Status.OK:
-                    if (!checkHandshake(result.getHandshakeStatus(), onReadyTask)) {
-                        // Handshaking wants to pause the send.  Flush what
-                        // we have to the network.
-                        // TODO: this isn't quite right, since you don't want
-                        // to trigger the done callback in handleNetSend.
-                        // Check... probably need to assign a particular send
-                        // state that will wait for handshake completion
-                        // while preserving the callback.
-                        done = true;
-
-                        // TODO: you need to perform a continuation since
-                        // callback needs to be preserved, etc. wrapHandshake
-                    }
-                    break;
-            }
-
-            srcArray.update();
-        } while (!done);
-
-        // Flush the out buffer to the network.
-        outBuf.flip();
-        mConn.send(mNetSendCallback);
-
-        return true;
-    }
-
-    private void wrapSingle() {
-        // TODO: check handshake?
-        if (!checkHandshake(mSSLEngine.getHandshakeStatus(), mWrapSingle)) {
-            return;
-        }
-
-        // We need to wrap as much of the remainder as possible and
-        // schedule a new send.  Because the SSLEngine can generate handshaking
-        // data, we must always attempt a wrap, even if we've flushed all
-        // data generated by the application in mOutAppBuffer.
-
-        boolean done = false;
-        do {
-            ByteBuffer outBuf = mConn.getOutBuffer();
-            SSLEngine result = mSSLEngine.wrap(mOutAppBuffer, outBuf);
-            switch (result.getStatus()) {
-                case SSLEngineResult.Status.BUFFER_OVERFLOW:
-                    done = wrapOverflow();
-                    break;
-
-                case SSLEngineResult.Status.BUFFER_UNDERFLOW:
-                    // This can happen if the SSL is not handshaking and
-                    // no more app data exists in mOutAppBuffer.  We're done
-                    // wrapping data in this case.  We'll break out of the
-                    // loop to try and send any wrapped data.
-                    done = true;
-                    break;
-
-                case SSLEngineResult.Status.CLOSED:
-                    // Bubble up the close.
-                    if (mAppOnCloseCallback != null) {
-                        mAppOnCloseCallback.onClose(this);
-                    }
-
-                    // The engine has signaled completion, so there is nothing
-                    // left to do.
-                    closeImmediately();
-
-                    return;
-
-                case SSLEngineResult.Status.OK:
-                    if (!checkHandshake(result.getHandshakeStatus(), mWrapSingle)) {
-                        done = true;
-                    }
-                    // TODO
-                    // You need to flush network data and yet still wait for the task to complete.
-                    Runnable onReadyTask = mWrapHandshake;
-                    if (outBuf.position() != 0) {
-                        // We have data to flush.
-                        onReadyTask = 
-                        if (!checkHandshake(result.getHandshakeStatus())) {
-                        }
-                    } else {
-                    }
-                    if (!checkHandshake(result.getHandshakeStatus())) {
-                        // We need to wait for task completion.
-                        //
-                        // Flush any pending data to the network in the
-                        // meanwhile.
-                    }
-
-                    // Else, continue wrapping.
-                    break;
-            }
-        } while (!done);
-
-        // Queue the outBuf for sending.
-        outBuf.flip();
-        mConn.send(mNetSendCallback);
     }
 }
