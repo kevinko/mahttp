@@ -299,11 +299,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * mIsClosed will be set as a result.
      */
     private void closeImmediately() throws IOException {
-        if (mIsClosed) {
+        if (mState == State.CLOSED) {
             return;
         }
 
-        mIsClosed = true;
+        mState = State.CLOSED;
 
         // Clear possible external references.
         mOutAppBuffer = null;
@@ -323,7 +323,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void configureHandshakeState() {
-        // TODO
+        mState = HANDSHAKE;
+
+        // Turn off all persistent callbacks, as handshakes do not use
+        // persistent methods.
+        mConn.cancelRecv();
     }
 
     /**
