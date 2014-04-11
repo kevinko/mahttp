@@ -33,6 +33,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
         // closeImmediately has been reached.  Once closed, a connection
         // remains closed.
         CLOSED,
+        // App callbacks are never called while in this state.
         HANDSHAKE
     }
 
@@ -596,7 +597,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
             }
         }
 
-        onActiveNetSendSingle();
+        wrapActiveSingle();
     }
 
     private void onActiveNetSendMultiple(AsyncConnection conn) {
@@ -612,7 +613,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
                 case SINGLE:
                 case SINGLE_EXTERNAL:
-                    onActiveNetSendSingle();
+                    wrapActiveSingle();
                     return;
 
                 case MULTIPLE:
@@ -621,43 +622,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
             }
         }
 
-        do {
-            boolean done = stepActiveWrapMultiple();
-            if (!done) {
-                // Events are scheduled or the engine is closed.
-                return;
-            }
-            // Else, we're now handshaking.
-            configureHandshakeState();
-
-            done = stepHandshake(mSSLEngine.getHandshakeStatus());
-            if (!done) {
-                // Step handshake has already scheduled the appropriate events.
-                return;
-            }
-            // Else, we're now active.
-            configureActiveState();
-        } while (true);
-    }
-
-    private void onActiveNetSendSingle() {
-        do {
-            boolean done = stepActiveWrapSingle();
-            if (!done) {
-                // Events are scheduled or the engine is closed.
-                return;
-            }
-            // Else, we're now handshaking.
-            configureHandshakeState();
-
-            done = stepHandshake(mSSLEngine.getHandshakeStatus());
-            if (!done) {
-                // Step handshake has already scheduled the appropriate events.
-                return;
-            }
-            // Else, we're now active.
-            configureActiveState();
-        } while (true);
+        wrapActiveMultiple();
     }
 
     private void onHandshakeNetRecv(AsyncConnection conn, ByteBuffer bufArg) {
@@ -761,14 +726,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
 
         mInNetBufferStart = 0;
-
-        // Maintain INVARIANT.
-        mCallbackHasRecv = true;
-
-        mIsRecvPersistent = false;
+        mRecvType = RecvType.SIMPLE;
         mAppRecvCallback = callback;
 
-        mConn.recv(mNetRecvCallback);
+        // User methods can only be called while active.
+        mConn.recv(mActiveNetRecvCallback);
     }
 
     @Override
@@ -778,14 +740,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
 
         mInNetBufferStart = 0;
-
-        // Maintain INVARIANT.
-        mCallbackHasRecv = true;
-
-        mIsRecvPersistent = true;
+        mRecvType = RecvType.PERSISTENT;
         mAppRecvCallback = callback;
 
-        mConn.recvPersistent(mNetRecvCallback);
+        mConn.recvPersistent(mActiveNetRecvCallback);
     }
 
     private void restoreActiveRecv(RecvType recvType) {
@@ -822,22 +780,15 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     public void send(OnSendCallback callback) throws IllegalArgumentException {
-        if (callback == null) {
-            throw new IllegalArgumentException();
-        }
-
         sendSingle(SendType.SINGLE, mOutAppBufferInternal, callback);
     }
 
     public void send(OnSendCallback callback, ByteBuffer buf) throws IllegalArgumentException {
-        if (callback == null) {
-            throw new IllegalArgumentException();
-        }
-
         sendSingle(SendType.SINGLE, buf, callback);
     }
 
-    public void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining) throws IllegalArgumentException {
+    public void send(OnSendCallback callback, ByteBuffer[] bufs, long bufsRemaining)
+            throws IllegalArgumentException {
         if (callback == null) {
             throw new IllegalArgumentException();
         }
@@ -846,22 +797,31 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mAppSendCallback = callback;
         mOutAppBuffersExternal = new ByteBufferArray(bufs);
 
-        wrapMultiple();
+        wrapActiveMultiple();
     }
 
     /**
+     * It is assumed that this is only called in the ACTIVE state.  (App
+     * callbacks are never triggered in the HANDSHAKE state.)
+     *
      * @param type
      * @param buf the application buffer holding outgoing data.  It can be
      * null, which signals a send for handshaking purposes.
-     * @param callback can be null, which will signal a send specifically for
-     * SSLEngine handshaking purposes.
+     * @param callback cannot be null.
+     *
+     * @throws IllegalArgumentException if callback is null
      */
-    private void sendSingle(SendType type, ByteBuffer buf, OnSendCallback callback) {
+    private void sendSingle(SendType type, ByteBuffer buf, OnSendCallback callback)
+            throws IllegalArgumentException {
+        if (callback == null) {
+            throw new IllegalArgumentException();
+        }
+
         mSendType = type;
         mAppSendCallback = callback;
         mOutAppBuffer = buf;
 
-        wrapSingle();
+        wrapActiveSingle();
     }
 
     @Override
@@ -1201,5 +1161,55 @@ class SSLNonBlockingConnection implements AsyncConnection {
         } while (true);
 
         return false;
+    }
+
+    /**
+     * Loop over the wrapping steps, starting with the active state.
+     * The app send callback will never be called from within.  Instead,
+     * it is assumed that the callback is triggered after any wrapped
+     * data is flushed to the network and thus in onActiveNetSend().
+     */
+    private void wrapActiveSingle() {
+        do {
+            boolean done = stepActiveWrapSingle();
+            if (!done) {
+                // Events are scheduled or the engine is closed.
+                return;
+            }
+            // Else, we're now handshaking.
+            configureHandshakeState();
+
+            done = stepHandshake(mSSLEngine.getHandshakeStatus());
+            if (!done) {
+                // Step handshake has already scheduled the appropriate events.
+                return;
+            }
+            // Else, we're now active.
+            configureActiveState();
+        } while (true);
+    }
+
+    /**
+     * The "Multiple" variant of wrapActiveSingle.  stepActiveWrapMultiple()
+     * will be called to wrap buffer arrays provided by the app.
+     */
+    private void wrapActiveMultiple() {
+        do {
+            boolean done = stepActiveWrapMultiple();
+            if (!done) {
+                // Events are scheduled or the engine is closed.
+                return;
+            }
+            // Else, we're now handshaking.
+            configureHandshakeState();
+
+            done = stepHandshake(mSSLEngine.getHandshakeStatus());
+            if (!done) {
+                // Step handshake has already scheduled the appropriate events.
+                return;
+            }
+            // Else, we're now active.
+            configureActiveState();
+        } while (true);
     }
 }
