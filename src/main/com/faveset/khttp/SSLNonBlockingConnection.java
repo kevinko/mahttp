@@ -19,13 +19,16 @@ import javax.net.ssl.SSLSession;
  * This should only be used with Android 4.0+ targets.
  *
  * See https://code.google.com/p/android/issues/detail?id=12955
+ *
+ * We assume that all public methods are only callable when the
+ * SSLNonBlockingConnection is not handshaking.  This is enforced by
+ * only calling application callbacks during the ACTIVE state.
  */
 
 // TODO: fix send callbacks (esp. in handshake wraps), like with onActiveNetRecv.
 // it might not be necessary to have the send checks, if you handle send states
 // directly in the send() method.  however, we use it in handlers so that we can
 // switch between the various send/receive types and handle things immediately.
-// TODO: fix sending.  you are not handling handshakes and continuations.
 class SSLNonBlockingConnection implements AsyncConnection {
     private enum State {
         // Actively sending data.
@@ -732,8 +735,12 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mRecvType = RecvType.SIMPLE;
         mAppRecvCallback = callback;
 
-        // User methods can only be called while active.
-        mConn.recv(mActiveNetRecvCallback);
+        // User methods can only be called while mState == ACTIVE, so we need
+        // not worry about overriding a handshaking state.
+        //
+        // Be sure to use the append form of receive, since the in net buffer
+        // might contain partially unwrapped data.
+        mConn.recvAppend(mActiveNetRecvCallback);
     }
 
     @Override
@@ -745,7 +752,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mRecvType = RecvType.PERSISTENT;
         mAppRecvCallback = callback;
 
-        mConn.recvPersistent(mActiveNetRecvCallback);
+        // Be sure to use the append form of receive, since the in net buffer
+        // might contain partially unwrapped data.
+        mConn.recvAppendPersistent(mActiveNetRecvCallback);
     }
 
     private void restoreActiveRecv(RecvType recvType) {
