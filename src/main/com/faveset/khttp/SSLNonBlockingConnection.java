@@ -666,6 +666,19 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
 
         configureActiveState();
+        // TODO: proactive wrap?
+    }
+
+    private void onNetClose(AsyncConnection conn) {
+        // We can no longer handshake, since the connection is down.
+        // Treat as if the engine is itself closed.
+        handleEngineClose();
+    }
+
+    private void onNetError(AsyncConnection conn, String reason) {
+        if (mAppErrorCallback != null) {
+            mAppErrorCallback.onError(this, reason);
+        }
     }
 
     /**
@@ -683,19 +696,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
 
         configureActiveState();
-        // TODO: proactive wrap?
-    }
-
-    private void onNetClose(AsyncConnection conn) {
-        // We can no longer handshake, since the connection is down.
-        // Treat as if the engine is itself closed.
-        handleEngineClose();
-    }
-
-    private void onNetError(AsyncConnection conn, String reason) {
-        if (mAppErrorCallback != null) {
-            mAppErrorCallback.onError(this, reason);
-        }
+        // TODO: proactive wrap/unwrap?
     }
 
     /**
@@ -805,19 +806,23 @@ class SSLNonBlockingConnection implements AsyncConnection {
      *
      * @return true if any tasks were scheduled
      */
-    private void restoreActiveSend(SendType sendType) {
-        if (sendType == SendType.NONE) {
-            // See if we must flush the send buffer despite not having work.
-            ByteBuffer outBuf = mConn.getOutBuffer();
-            if (outBuf.position() != 0) {
-                outBuf.flip();
-                mConn.send(mNoneActiveNetSendCallback);
+    private boolean scheduleHandshakeTasks(Runnable onTasksDoneCallback) {
+        boolean hasTask = false;
+        do {
+            Runnable task = mSSLEngine.getDelegatedTask();
+            if (task == null) {
+                break;
             }
-            return;
+            sSerialWorkerExecutor.execute(task);
+            hasTask = true;
+        } while (true);
+
+        if (hasTask) {
+            // Re-schedule after tasks have completed.
+            sSerialWorkerExecutor.execute(mTasksDoneCallback);
         }
 
-        // Otherwise, we have some work.
-        performActiveWrap();
+        return hasTask;
     }
 
     public void send(OnSendCallback callback) throws IllegalArgumentException {
@@ -888,28 +893,12 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     /**
-     * @param onTaskDoneCallback will be called after all engine tasks
-     * are completed.
-     *
-     * @return true if any tasks were scheduled
+     * The user should call this method when ready to start handshaking and
+     * event handling.
      */
-    private boolean scheduleHandshakeTasks(Runnable onTaskDoneCallback) {
-        boolean hasTask = false;
-        do {
-            Runnable task = mSSLEngine.getDelegatedTask();
-            if (task == null) {
-                break;
-            }
-            sSerialWorkerExecutor.execute(task);
-            hasTask = true;
-        } while (true);
-
-        if (hasTask) {
-            // Re-schedule after tasks have completed.
-            sSerialWorkerExecutor.execute(mTaskDoneCallback);
-        }
-
-        return hasTask;
+    public void start() {
+        // TODO
+        stepHandshakeWrap();
     }
 
     /**
@@ -964,6 +953,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     /**
+     * Handles application buffer overflow by resizing if requested by the
+     * SSLEngine or by calling the application callback.
+     *
      * @return true if unwrapping should stop.
      */
     private boolean stepActiveUnwrapOverflow() {
@@ -1067,6 +1059,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
             switch (status) {
                 case NOT_HANDSHAKING:
                 case FINISHED:
+                    // We don't flush the out net buffer, since it's still
+                    // possible to wrap application data before needing to
+                    // touch the network.
                     return true;
 
                 case NEED_TASK:
@@ -1212,6 +1207,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
      */
     private void wrapActiveSingle() {
         do {
+            // We need not worry about changing to a send multiple state.
+            // The INVARIANT insures that the app's send callback is only called
+            // in onActiveNetSend().  Thus, the send type cannot change within
+            // this loop.
             boolean done = stepActiveWrapSingle();
             if (!done) {
                 // Events are scheduled or the engine is closed.
@@ -1236,6 +1235,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
      */
     private void wrapActiveMultiple() {
         do {
+            // As with wrapActiveSingle, we need not worry about changing to an
+            // alternate send type.  The INVARIANT insures that the app's send
+            // callback is only called in onActiveNetSend().  Thus, the send
+            // type cannot change within this loop.
             boolean done = stepActiveWrapMultiple();
             if (!done) {
                 // Events are scheduled or the engine is closed.
