@@ -60,8 +60,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
     // This is used for executing SSLEngine blocking tasks in a dedicated
     // thread.  It is guaranteed to process tasks in serial order.
-    private static Executor sSerialWorkerExecutor =
-        Executors.newSingleThreadExecutor();
+    private static Executor sSerialWorkerExecutor = Executors.newSingleThreadExecutor();
 
     private State mState;
 
@@ -120,6 +119,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
     private AsyncConnection.OnRecvCallback mAppRecvCallback;
 
     // INVARIANT: this is null iff mSendType == NONE.
+    // INVARIANT: this is only called in mActiveNetSendCallback.  See
+    // performAppSendCallback().
     private AsyncConnection.OnSendCallback mAppSendCallback;
 
     // This is signaled on abrupt connection close by NonBlockingConnection.
@@ -178,9 +179,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
             }
         };
 
-    // This should be scheduled after executor tasks to signal completion
-    // and restore any paused events.
-    private Runnable mTaskDoneCallback =
+    // This should be scheduled after any executor tasks to signal completion
+    // and restore events that were paused prior to execution..
+    private Runnable mTasksDoneCallback =
         new Runnable() {
             @Override
             public void run() {
@@ -188,26 +189,28 @@ class SSLNonBlockingConnection implements AsyncConnection {
             }
         };
 
+    private OpRequests mOpRequests = new OpRequests();
+
     /**
      * @param selector
      * @param chan
      * @param isDirect true if direct ByteBuffers should be allocated
-     * @param taskQueue for handling short non-blocking operations in the
-     * primary event thread (e.g., for scheduling events).
+     * @param nonBlockingTaskQueue for handling short non-blocking operations
+     * in the primary event thread (e.g., for scheduling events).
      *
      * @throws IOException
      * @throws NoSuchAlgorithmException if SSL could not be configured
      * due to lack of security algorithm support on the platform.
      */
     public SSLNonBlockingConnection(Selector selector, SocketChannel chan,
-            boolean isDirect, SelectTaskQueue taskQueue)
-                throws IOException, NoSuchAlgorithmException {
+            boolean isDirect, SelectTaskQueue nonBlockingTaskQueue)
+            throws IOException, NoSuchAlgorithmException {
         mState = HANDSHAKE;
 
         mRecvType = RecvType.NONE;
         mSendType = SendType.NONE;
 
-        mSelectTaskQueue = taskQueue;
+        mSelectTaskQueue = nonBlockingTaskQueue;
 
         // We'll assign the internal in and out buffers using sizes from the
         // SSLSession.
@@ -296,27 +299,34 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
     /**
      * Closes the connection immediately without attempting to handshake the
-     * closure.  This should normally be called when the engine enters
-     * the CLOSED state or if the NonBlockingConnection is closed.
-     *
-     * mIsClosed will be set as a result.
+     * closure.  This should normally be called when one wishes the engine to
+     * enter the CLOSED state or if the NonBlockingConnection is closed.
      */
     private void closeImmediately() throws IOException {
         if (mState == State.CLOSED) {
             return;
         }
 
+        mConn.close();
+
         mState = State.CLOSED;
+
+        mRecvType = RecvType.NONE;
+        mSendType = SendType.NONE;
+
+        mAppRecvCallback = null;
+        mAppSendCallback = null;
 
         // Clear possible external references.
         mOutAppBuffer = null;
         mOutAppBuffersExternal = null;
-
-        mConn.close();
     }
 
     /**
-     * Restores the active state and all relevant handlers.
+     * Restores the active state and related handlers, assuming that the
+     * caller is already unwrapping data.
+     *
+     * TODO: determine whether the configure states are necessary.
      */
     private void configureActiveState() {
         mState = ACTIVE;
@@ -326,7 +336,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void configureHandshakeState() {
-        mState = HANDSHAKE;
+        mState = State.HANDSHAKE;
 
         // Turn off all persistent callbacks, as handshakes do not use
         // persistent methods.
@@ -356,8 +366,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
      */
     private void handleEngineClose() {
         // Bubble up the close.
-        if (mAppOnCloseCallback != null) {
-            mAppOnCloseCallback.onClose(this);
+        if (mAppCloseCallback != null) {
+            mAppCloseCallback.onClose(this);
         }
 
         // The engine has signaled completion, so there is nothing
@@ -385,8 +395,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 break;
 
             case BUFFER_UNDERFLOW:
-                // We're out of application data.  Send to the network.
-                // The application callback will be triggered on completion.
+                // We're out of application data.  Send what we have to the
+                // network.  The application callback will be triggered on
+                // completion.
                 ByteBuffer outBuf = mConn.getOutBuffer();
                 outBuf.flip();
                 mConn.send(mActiveNetSendCallback);
@@ -672,6 +683,19 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
 
         configureActiveState();
+        // TODO: proactive wrap?
+    }
+
+    private void onNetClose(AsyncConnection conn) {
+        // We can no longer handshake, since the connection is down.
+        // Treat as if the engine is itself closed.
+        handleEngineClose();
+    }
+
+    private void onNetError(AsyncConnection conn, String reason) {
+        if (mAppErrorCallback != null) {
+            mAppErrorCallback.onError(this, reason);
+        }
     }
 
     /**
@@ -757,23 +781,29 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mConn.recvAppendPersistent(mActiveNetRecvCallback);
     }
 
-    private void restoreActiveRecv(RecvType recvType) {
+    /**
+     * @return true if an event was scheduled
+     */
+    private boolean restoreActiveRecv(RecvType recvType) {
         switch (recvType) {
             case NONE:
-                return;
+                return false;
 
             case SIMPLE:
                 mConn.recvAppend(mActiveNetRecvCallback);
-                break
+                return true;
 
             case PERSISTENT:
                 mConn.recvAppendPersistent(mActiveNetRecvCallback);
-                break;
+                return true;
         }
     }
 
     /**
-     * Restores the active send state given the sendType.
+     * @param onTasksDoneCallback will be called after all engine tasks
+     * are completed.
+     *
+     * @return true if any tasks were scheduled
      */
     private void restoreActiveSend(SendType sendType) {
         if (sendType == SendType.NONE) {
