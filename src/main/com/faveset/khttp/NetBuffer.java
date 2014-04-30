@@ -21,7 +21,7 @@ class NetBuffer {
     // mix of appending and reading.
     private int mStartPos;
 
-    private ByteBuffer mBuf;
+    protected ByteBuffer mBuf;
 
     /**
      * This wraps and manages buf.  The NetBuffer will be prepared for
