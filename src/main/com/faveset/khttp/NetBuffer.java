@@ -50,6 +50,34 @@ class NetBuffer {
     }
 
     /**
+     * @return true if the underlying buffer is cleared (ByteBuffer.clear()).
+     */
+    public boolean isCleared() {
+        return (mBuf.position() == 0 && mBuf.limit() == mBuf.capacity());
+    }
+
+    /**
+     * @return true if the underlying buffer is empty with respect to its
+     * current state (read/append).
+     */
+    public boolean isEmpty() {
+        if (mState == READ) {
+            return !(mbuf.hasRemaining());
+        }
+        return (mBuf.position() == mStartPos);
+    }
+
+    /**
+     * @param size requested size.
+     *
+     * @return true if the underlying buffer must be resized to meet the given
+     * size requirement.
+     */
+    public boolean needsResize(int size) {
+        return (mBuf.capacity() < size);
+    }
+
+    /**
      * Prepares the buffer for a network channel append.  The buffer will
      * be flipped so that its position will be the limit and the new limit
      * will be its capacity.
