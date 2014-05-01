@@ -3,6 +3,7 @@
 package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
+import javax.net.ssl.SSLEngineResult;
 
 /**
  * This is a wrapper for a ByteBuffer that provides additional state for tracking
@@ -45,7 +46,7 @@ class NetBuffer {
     /**
      * @return the underlying ByteBuffer.
      */
-    public ByteBuffer getByteBuffer() {
+    protected ByteBuffer getByteBuffer() {
         return mBuf;
     }
 
@@ -159,6 +160,33 @@ class NetBuffer {
     }
 
     /**
+     * SSL unwraps the contents of this buffer into dest.
+     *
+     * This method is safe and will prepare the current buffer for reading
+     * and the dest buffer for appending.  See unwrapUnsafe() if this check
+     * is not necessary.
+     *
+     * @param engine
+     * @param dest
+     */
+    public SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest) {
+        prepareRead();
+        dest.prepareAppend();
+
+        return engine.unwrap(mBuf, dest.mBuf);
+    }
+
+    /**
+     * Unsafe variant of unwrap that does not prepare this or dest.
+     *
+     * @param engine
+     * @param dest
+     */
+    public SSLEngineResult unwrapUnsafe(SSLEngine engine, NetBuffer dest) {
+        return engine.unwrap(mBuf, dest.mBuf);
+    }
+
+    /**
      * Updates read position pointers based on the ByteBuffer's state.
      * This must be called after reading from the ByteBuffer to mark the
      * starting position of unread data.
@@ -169,5 +197,30 @@ class NetBuffer {
         }
 
         mStartPos = mBuf.position();
+    }
+
+    /**
+     * Wraps the contents of this into dest.  "this" will be prepared
+     * for reading, and dest will be prepared for appending.  See wrapUnsafe()
+     * if this check is not needed.
+     *
+     * @param engine
+     * @param dest
+     */
+    public SSLEngineResult wrap(SSLEngine engine, NetBuffer dest) {
+        prepareRead();
+        dest.prepareAppend();
+
+        return mSSLEngine.wrap(mBuf, dest);
+    }
+
+    /**
+     * Variant of wrap that doesn't prepare "this" or dest.
+     *
+     * @param engine
+     * @param dest
+     */
+    public SSLEngineResult wrapUnsafe(SSLEngine engine, NetBuffer dest) {
+        return mSSLEngine.wrap(mBuf, dest);
     }
 }
