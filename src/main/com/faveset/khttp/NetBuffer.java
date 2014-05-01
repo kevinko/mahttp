@@ -9,7 +9,8 @@ import javax.net.ssl.SSLEngineResult;
  * This is a wrapper for a ByteBuffer that provides additional state for tracking
  * position over multiple network operations.
  */
-class NetBuffer {
+
+class NetBuffer implements NetReader {
     private enum State {
         APPEND,
         READ,
@@ -22,7 +23,7 @@ class NetBuffer {
     // mix of appending and reading.
     private int mStartPos;
 
-    protected ByteBuffer mBuf;
+    private ByteBuffer mBuf;
 
     /**
      * This wraps and manages buf.  The NetBuffer will be prepared for
@@ -61,6 +62,7 @@ class NetBuffer {
      * @return true if the underlying buffer is empty with respect to its
      * current state (read/append).
      */
+    @Override
     public boolean isEmpty() {
         if (mState == READ) {
             return !(mbuf.hasRemaining());
@@ -169,6 +171,7 @@ class NetBuffer {
      * @param engine
      * @param dest
      */
+    @Override
     public SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest) {
         prepareRead();
         dest.prepareAppend();
@@ -182,6 +185,7 @@ class NetBuffer {
      * @param engine
      * @param dest
      */
+    @Override
     public SSLEngineResult unwrapUnsafe(SSLEngine engine, NetBuffer dest) {
         return engine.unwrap(mBuf, dest.mBuf);
     }
@@ -191,6 +195,7 @@ class NetBuffer {
      * This must be called after reading from the ByteBuffer to mark the
      * starting position of unread data.
      */
+    @Override
     public void updateRead() {
         if (mState != READ) {
             return;
@@ -207,6 +212,7 @@ class NetBuffer {
      * @param engine
      * @param dest
      */
+    @Override
     public SSLEngineResult wrap(SSLEngine engine, NetBuffer dest) {
         prepareRead();
         dest.prepareAppend();
@@ -220,6 +226,7 @@ class NetBuffer {
      * @param engine
      * @param dest
      */
+    @Override
     public SSLEngineResult wrapUnsafe(SSLEngine engine, NetBuffer dest) {
         return mSSLEngine.wrap(mBuf, dest);
     }
