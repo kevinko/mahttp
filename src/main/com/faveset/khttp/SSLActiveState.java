@@ -9,42 +9,11 @@ import javax.net.ssl.SSLEngineResult;
 /**
  * This provides methods for actively sending and receiving data (not handshaking).
  */
-class SSLActiveState {
+class SSLActiveState extends SSLBaseState {
     private SSLEngine mSSLEngine;
 
     public SSLActiveState(SSLEngine engine) {
         mSSLEngine = engine;
-    }
-
-    /**
-     * @param buf
-     * @param newBufSize the new buffer size that is needed by the SSLEngine.
-     *
-     * @return false if the buffer was not empty and should be drained.
-     * Otherwise, the buffer was resized (or cleared) and any operations
-     * should be retried.
-     */
-    private static boolean handleBufferOverflow(NetBuffer buf, int newBufSize) {
-        if (!buf.isEmpty()) {
-            return false;
-        }
-
-        if (!buf.isCleared()) {
-            buf.clear();
-
-            // Retry now that more space is available.
-            return true;
-        }
-
-        // At this point, the buffer is empty and cleared.
-        // A resize must be necessary.
-        if (!buf.needsResize(newBufSize)) {
-            throw RuntimeException("expected buffer resize but not possible");
-        }
-
-        buf.resizeUnsafe(newBufSize);
-
-        return true;
     }
 
     /**
@@ -55,6 +24,7 @@ class SSLActiveState {
      * is needed.  false if no state change but a callback was scheduled
      * on conn (possibly connection close).
      */
+    @Override
     public OpResult stepUnwrap(NetReader src, NetBuffer dest) {
         do {
             SSLEngineResult result = src.unwrap(mSSLEngine, dest);
@@ -62,7 +32,7 @@ class SSLActiveState {
                 case BUFFER_OVERFLOW:
                     // dest is the (unwrapped) application buffer.
                     int newBufSize = mSSLEngine.getSession().getApplicationBufferSize();
-                    if (!handleBufferOverflow(dest, newBufSize)) {
+                    if (!resizeOverflowedBuffer(dest, newBufSize)) {
                         // dest was not empty.  Drain it first.
                         return OpResult.DRAIN_DEST_BUFFER;
                     }
@@ -92,6 +62,7 @@ class SSLActiveState {
         } while (true);
     }
 
+    @Override
     public OpResult stepWrap(NetReader src, NetBuffer dest) {
         do {
             SSLEngineResult result = src.wrap(mSSLEngine, dest);
@@ -99,7 +70,7 @@ class SSLActiveState {
                 case BUFFER_OVERFLOW:
                     // dest is destined for the network, hence packet buffer.
                     int newBufSize = mSSLEngine.getSession().getPacketBufferSize();
-                    if (!handleBufferOverflow(dest, newBufSize)) {
+                    if (!resizeOverflowedBuffer(dest, newBufSize)) {
                         // dest was empty.
                         return OpResult.DRAIN_DEST_BUFFER;
                     }
