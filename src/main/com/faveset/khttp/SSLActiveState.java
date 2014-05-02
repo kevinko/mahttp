@@ -10,11 +10,9 @@ import javax.net.ssl.SSLEngineResult;
  * This provides methods for actively sending and receiving data (not handshaking).
  */
 class SSLActiveState {
-    private NonBlockingConnection mConn;
     private SSLEngine mSSLEngine;
 
-    public SSLActiveState(NonBlockingConnection conn, SSLEngine engine) {
-        mConn = conn;
+    public SSLActiveState(SSLEngine engine) {
         mSSLEngine = engine;
     }
 
