@@ -4,7 +4,7 @@ package com.faveset.khttp;
 
 import javax.net.ssl.SSLEngine;
 
-class SSLHandshakeState {
+class SSLHandshakeState extends SSLBaseState {
     private SSLEngine mSSLEngine;
 
     public SSLHandshakeState(SSLEngine engine) {
