@@ -71,7 +71,7 @@ class SSLActiveState extends SSLBaseState {
                     // dest is destined for the network, hence packet buffer.
                     int newBufSize = mSSLEngine.getSession().getPacketBufferSize();
                     if (!resizeOverflowedBuffer(dest, newBufSize)) {
-                        // dest was empty.
+                        // dest was not empty.
                         return OpResult.DRAIN_DEST_BUFFER;
                     }
                     // Otherwise, the dest buffer was resized.  Continue
