@@ -6,6 +6,9 @@ import java.nio.ByteBuffer;
 import javax.net.ssl.SSLEngine;
 
 interface NetReader {
+    /**
+     * @return true if the NetReader does not contain any more data for reading.
+     */
     boolean isEmpty();
 
     SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest);
