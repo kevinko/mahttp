@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 class ArrayNetReader implements NetReader {
     private ByteBufferArray mBufArray;
 
-    public ArrayNetBuffer(ByteBuffer bufs) {
+    public ArrayNetBuffer(ByteBuffer[] bufs) {
         this(new ByteBufferArray(bufs));
     }
 
