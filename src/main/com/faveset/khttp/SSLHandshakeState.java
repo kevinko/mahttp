@@ -24,7 +24,7 @@ class SSLHandshakeState extends SSLBaseState {
 
                 case BUFFER_UNDERFLOW:
                     // We need more data from the network.
-                    return OpResult.LOAD_SRC_BUFFER;
+                    return OpResult.UNWRAP_LOAD_SRC_BUFFER;
 
                 case CLOSED:
                     return OpResult.ENGINE_CLOSE;

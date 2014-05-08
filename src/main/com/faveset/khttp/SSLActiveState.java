@@ -43,7 +43,7 @@ class SSLActiveState extends SSLBaseState {
 
                 case BUFFER_UNDERFLOW:
                     // We need more data in the (src) network buffer to unwrap.
-                    return OpResult.LOAD_SRC_BUFFER;
+                    return OpResult.UNWRAP_LOAD_SRC_BUFFER;
 
                 case CLOSED:
                     return ENGINE_CLOSE;
