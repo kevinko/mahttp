@@ -21,12 +21,12 @@ class NonBlockingConnectionOutNetBuffer extends NetBuffer {
     @Override
     public void resize(ByteBufferFactory factory, int size) {
         super.resize(factory, size);
-        mConn.setOutBufferInternal(mBuf);
+        mConn.setOutBufferInternal(getByteBuffer());
     }
 
     @Override
     public void resizeUnsafe(ByteBufferFactory factory, int size) {
         super.resizeUnsafe(factory, size);
-        mConn.setOutBufferInternal(mBuf);
+        mConn.setOutBufferInternal(getByteBuffer());
     }
 }
