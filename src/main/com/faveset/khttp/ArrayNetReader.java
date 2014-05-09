@@ -3,32 +3,34 @@
 package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
+import javax.net.ssl.SSLException;
 
 class ArrayNetReader implements NetReader {
     private ByteBufferArray mBufArray;
 
-    public ArrayNetBuffer(ByteBuffer[] bufs) {
+    public ArrayNetReader(ByteBuffer[] bufs) {
         this(new ByteBufferArray(bufs));
     }
 
-    public ArrayNetBuffer(ByteBufferArray bufArray) {
+    public ArrayNetReader(ByteBufferArray bufArray) {
         mBufArray = bufArray;
     }
 
+    @Override
     public boolean isEmpty() {
-        return !mBufArray.hasRemaining();
+        return (!mBufArray.hasRemaining());
     }
 
-    public SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest) {
+    @Override
+    public SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest) throws SSLException {
         dest.prepareAppend();
-
-        SSLEngineResult result = engine.unwrap(mBufArray.getBuffers(), dest);
-        mBufArray.update();
-        return result;
+        return unwrapUnsafe(engine, dest);
     }
 
-    public SSLEngineResult unwrapUnsafe(SSLEngine engine, NetBuffer dest) {
-        SSLEngineResult result = engine.unwrap(mBufArray.getBuffers(), dest);
+    public SSLEngineResult unwrapUnsafe(SSLEngine engine, NetBuffer dest) throws SSLException {
+        SSLEngineResult result = engine.unwrap(mBufArray.getBuffers(),
+                mBufArray.getNonEmptyOffset(), mBufArray.getNonEmptyLength(),
+                dest);
         mBufArray.update();
         return result;
     }
@@ -37,17 +39,15 @@ class ArrayNetReader implements NetReader {
         // This is a NOP, since we update the buf array after every wrap/unwrap.
     }
 
-    public SSLEngineResult wrap(SSLEngine engine, NetBuffer dest) {
+    public SSLEngineResult wrap(SSLEngine engine, NetBuffer dest) throws SSLException {
         dest.prepareAppend();
-
-        SSLEngineResult result = engine.wrap(mBufArray.getBuffers(), dest);
-        mBufArray.update();
-
-        return result;
+        return wrapUnsafe(engine, dest);
     }
 
-    public SSLEngineResult wrapUnsafe(SSLEngine engine, NetBuffer dest) {
-        SSLEngineResult result = engine.wrap(mBufArray.getBuffers(), dest);
+    public SSLEngineResult wrapUnsafe(SSLEngine engine, NetBuffer dest) throws SSLException {
+        SSLEngineResult result = engine.wrap(mBufArray.getBuffers(),
+                mBufArray.getNonEmptyOffset(), mBufArray.getNonEmptyLength(),
+                dest);
         mBufArray.update();
         return result;
     }
