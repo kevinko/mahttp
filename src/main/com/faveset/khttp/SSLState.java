@@ -2,8 +2,6 @@
 
 package com.faveset.khttp;
 
-import java.nio.ByteBuffer;
-
 interface SSLState {
     enum OpResult {
         NONE,
