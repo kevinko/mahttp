@@ -3,6 +3,7 @@
 package com.faveset.khttp;
 
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLException;
 
 class SSLHandshakeState extends SSLBaseState {
     private SSLEngine mSSLEngine;
@@ -12,7 +13,7 @@ class SSLHandshakeState extends SSLBaseState {
     }
 
     @Override
-    public OpResult stepUnwrap(NetReader src, NetBuffer dest) {
+    public OpResult stepUnwrap(NetReader src, NetBuffer dest) throws SSLException {
         do {
             SSLEngineResult result = src.unwrap(mSSLEngine, dest);
             switch (result.getStatus()) {
@@ -41,6 +42,7 @@ class SSLHandshakeState extends SSLBaseState {
                     return OpResult.SCHEDULE_TASKS;
 
                 case NEED_UNWRAP:
+                    // We're already unwrapping.
                     break;
 
                 case NEED_WRAP:
@@ -54,11 +56,12 @@ class SSLHandshakeState extends SSLBaseState {
     }
 
     @Override
-    public OpResult stepWrap(NetReader src, NetBuffer dest) {
+    public OpResult stepWrap(NetReader src, NetBuffer dest) throws SSLException {
         do {
             SSLEngineResult result = src.wrap(mSSLEngine, dest);
             switch (result.getStatus()) {
                 case BUFFER_OVERFLOW:
+                    // dest is an outgoing network buffer; hence, use packet size.
                     int newBufSize = mSSLEngine.getSession().getPacketBufferSize();
                     if (!resizeOverflowedBuffer(dest, newBufSize)) {
                         // dest was not empty.
@@ -70,7 +73,8 @@ class SSLHandshakeState extends SSLBaseState {
 
                 case BUFFER_UNDERFLOW:
                     // This shouldn't happen when handshaking unless we've dropped out of the
-                    // handshake state.  Let the subsequent handshake switch() handle things.
+                    // handshake state, because handshaking does not wrap application data.  Let
+                    // the subsequent handshake switch() handle things.
                     break;
 
                 case CLOSED:
@@ -93,6 +97,7 @@ class SSLHandshakeState extends SSLBaseState {
                     return OpResult.SCHEDULE_UNWRAP;
 
                 case NEED_WRAP:
+                    // We're already wrapping.
                     break;
 
                 case FINISHED:
