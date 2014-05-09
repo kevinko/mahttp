@@ -9,7 +9,6 @@ import javax.net.ssl.SSLEngineResult;
  * This is a wrapper for a ByteBuffer that provides additional state for tracking
  * position over multiple network operations.
  */
-
 class NetBuffer implements NetReader {
     private enum State {
         APPEND,
@@ -26,13 +25,33 @@ class NetBuffer implements NetReader {
     private ByteBuffer mBuf;
 
     /**
-     * This wraps and manages buf.  The NetBuffer will be prepared for
-     * appending.
+     * Wraps a ByteBuffer that is positioned for appending data to buf's current position.
      *
+     * @param buf must already be positioned for appending.
+     */
+    public static NetBuffer makeAppendBuffer(ByteBuffer buf) {
+        return new NetBuffer(APPEND, buf);
+    }
+
+    /**
+     * Wraps a ByteBuffer that is positioned for a read.
+     *
+     * @param buf must already be flipped for reading.
+     */
+    public static NetBuffer makeReadBuffer(ByteBuffer buf) {
+        NetBuffer netBuf = new NetBuffer(READ, buf);
+        netBuf.mStartPos = buf.position();
+        return netBuf;
+    }
+
+    /**
+     * This wraps and manages buf.  It is assumed that buf is positioned according to state.
+     *
+     * @param state
      * @param buf
      */
-    public NetBuffer(ByteBuffer buf) {
-        mState = APPEND;
+    private NetBuffer(State state, ByteBuffer buf) {
+        mState = state;
         mBuf = buf;
     }
 
@@ -85,13 +104,13 @@ class NetBuffer implements NetReader {
      * be flipped so that its position will be the limit and the new limit
      * will be its capacity.
      */
-    public void prepareAppend() {
+    private void prepareAppend() {
         if (mState == APPEND) {
             return;
         }
 
         // Flip the buffer so that new writes will appear at the end of the
-        // buffer.
+        // read buffer.
         mBuf.position(mBuf.limit());
         mBuf.limit(mBuf.capacity());
 
@@ -102,7 +121,7 @@ class NetBuffer implements NetReader {
      * This should be called after a network channel append completes.
      * It prepares (flips) the buffer for reading from the start of unread data.
      */
-    public void prepareRead() {
+    private void prepareRead() {
         if (mState == READ) {
             return;
         }
@@ -136,12 +155,16 @@ class NetBuffer implements NetReader {
         if (mState == APPEND) {
             mBuf.flip();
             mBuf.position(mStartPos);
+
+            newBuf.put(mBuf);
         } else {
-            // Otherwise, READ.  We are already positioned to copy
-            // unread data.
+            // Otherwise, READ.  We are already positioned to copy unread data.
+            newBuf.put(mBuf);
+
+            // Adjust newBuf's pointers for future reads from the newly copied data.
+            newBuf.flip();
         }
 
-        newBuf.put(mBuf);
         mBuf = newBuf;
     }
 
@@ -185,7 +208,6 @@ class NetBuffer implements NetReader {
      * @param engine
      * @param dest
      */
-    @Override
     public SSLEngineResult unwrapUnsafe(SSLEngine engine, NetBuffer dest) {
         return engine.unwrap(mBuf, dest.mBuf);
     }
@@ -226,7 +248,6 @@ class NetBuffer implements NetReader {
      * @param engine
      * @param dest
      */
-    @Override
     public SSLEngineResult wrapUnsafe(SSLEngine engine, NetBuffer dest) {
         return mSSLEngine.wrap(mBuf, dest);
     }
