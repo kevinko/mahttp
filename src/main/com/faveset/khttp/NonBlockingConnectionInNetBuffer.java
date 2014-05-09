@@ -7,13 +7,14 @@ import java.nio.ByteBuffer;
 /**
  * This extension updates an associated NonBlockingConnection's in buffer
  * when the buffer is resized.
+ *
+ * It uses the connection's internal ByteBuffer initially.
  */
 class NonBlockingConnectionInNetBuffer extends NetBuffer {
     private NonBlockingConnection mConn;
 
-    public NonBlockingConnectionInNetBuffer(NonBlockingConnection conn,
-            ByteBuffer buf) {
-        super(buf);
+    public NonBlockingConnectionInNetBuffer(NonBlockingConnection conn) {
+        super(conn.getInBuffer());
 
         mConn = conn;
     }
