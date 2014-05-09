@@ -27,6 +27,14 @@ class ByteBufferArray {
     }
 
     /**
+     * @return the number of non-empty ByteBuffers in the array returned by getByteBuffers(),
+     * starting from the offset returned by getNonEmptyOffset().
+     */
+    public int getNonEmptyLength() {
+        return (mBufs.length - mNonEmptyOffset);
+    }
+
+    /**
      * @return the offset of the first non-empty buffer since the last update().
      * This is equal to the length of the ByteBuffer array if no such buffer
      * exists.
