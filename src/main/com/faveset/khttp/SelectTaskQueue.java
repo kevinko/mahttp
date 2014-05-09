@@ -31,7 +31,7 @@ class SelectTaskQueue implements Executor {
     }
 
     public void execute(final Runnable r) {
-        mTaskQueue.offer(r);
+        mTaskQueue.add(r);
 
         mSelector.wakeup();
     }
