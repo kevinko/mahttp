@@ -4,6 +4,7 @@ package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLException;
 
 interface NetReader {
     /**
@@ -11,9 +12,9 @@ interface NetReader {
      */
     boolean isEmpty();
 
-    SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest);
+    SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest) throws SSLException;
 
     void updateRead();
 
-    SSLEngineResult wrap(SSLEngine engine, NetBuffer dest);
+    SSLEngineResult wrap(SSLEngine engine, NetBuffer dest) throws SSLException;
 }

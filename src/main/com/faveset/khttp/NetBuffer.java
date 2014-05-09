@@ -4,6 +4,7 @@ package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
 import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLException;
 
 /**
  * This is a wrapper for a ByteBuffer that provides additional state for tracking
@@ -104,7 +105,7 @@ class NetBuffer implements NetReader {
      * be flipped so that its position will be the limit and the new limit
      * will be its capacity.
      */
-    private void prepareAppend() {
+    void prepareAppend() {
         if (mState == APPEND) {
             return;
         }
@@ -193,9 +194,10 @@ class NetBuffer implements NetReader {
      *
      * @param engine
      * @param dest
+     * @throws SSLException
      */
     @Override
-    public SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest) {
+    public SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest) throws SSLException {
         prepareRead();
         dest.prepareAppend();
 
@@ -207,8 +209,9 @@ class NetBuffer implements NetReader {
      *
      * @param engine
      * @param dest
+     * @throws SSLException
      */
-    public SSLEngineResult unwrapUnsafe(SSLEngine engine, NetBuffer dest) {
+    public SSLEngineResult unwrapUnsafe(SSLEngine engine, NetBuffer dest) throws SSLException {
         return engine.unwrap(mBuf, dest.mBuf);
     }
 
@@ -233,9 +236,10 @@ class NetBuffer implements NetReader {
      *
      * @param engine
      * @param dest
+     * @throws SSLException
      */
     @Override
-    public SSLEngineResult wrap(SSLEngine engine, NetBuffer dest) {
+    public SSLEngineResult wrap(SSLEngine engine, NetBuffer dest) throws SSLException {
         prepareRead();
         dest.prepareAppend();
 
@@ -247,8 +251,9 @@ class NetBuffer implements NetReader {
      *
      * @param engine
      * @param dest
+     * @throws SSLException
      */
-    public SSLEngineResult wrapUnsafe(SSLEngine engine, NetBuffer dest) {
+    public SSLEngineResult wrapUnsafe(SSLEngine engine, NetBuffer dest) throws SSLException {
         return mSSLEngine.wrap(mBuf, dest);
     }
 }
