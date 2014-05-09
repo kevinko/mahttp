@@ -2,6 +2,8 @@
 
 package com.faveset.khttp;
 
+import javax.net.ssl.SSLException;
+
 abstract class SSLBaseState implements SSLState {
     /**
      * @param buf the overflowed buffer
@@ -34,7 +36,7 @@ abstract class SSLBaseState implements SSLState {
         return true;
     }
 
-    public abstract OpResult stepUnwrap(NetReader src, NetBuffer dest);
+    public abstract OpResult stepUnwrap(NetReader src, NetBuffer dest) throws SSLException;
 
-    public abstract OpResult stepWrap(NetReader src, NetBuffer dest);
+    public abstract OpResult stepWrap(NetReader src, NetBuffer dest) throws SSLException;
 }

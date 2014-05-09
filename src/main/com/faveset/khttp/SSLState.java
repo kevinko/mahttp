@@ -2,6 +2,8 @@
 
 package com.faveset.khttp;
 
+import javax.net.ssl.SSLException;
+
 interface SSLState {
     enum OpResult {
         NONE,
@@ -17,11 +19,15 @@ interface SSLState {
 
     /**
      * Unwraps from src to dest.
+     *
+     * @throws SSLException
      */
-    OpResult stepUnwrap(NetReader src, NetBuffer dest);
+    OpResult stepUnwrap(NetReader src, NetBuffer dest) throws SSLException;
 
     /**
      * Wraps from src to dest.
+     *
+     * @throws SSLException
      */
-    OpResult stepWrap(NetReader src, NetBuffer dest);
+    OpResult stepWrap(NetReader src, NetBuffer dest) throws SSLException;
 }
