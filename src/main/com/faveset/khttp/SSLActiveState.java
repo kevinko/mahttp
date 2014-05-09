@@ -5,6 +5,7 @@ package com.faveset.khttp;
 import java.nio.ByteBuffer;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLException;
 
 /**
  * This provides methods for actively sending and receiving data (not handshaking).
@@ -25,7 +26,7 @@ class SSLActiveState extends SSLBaseState {
      * on conn (possibly connection close).
      */
     @Override
-    public OpResult stepUnwrap(NetReader src, NetBuffer dest) {
+    public OpResult stepUnwrap(NetReader src, NetBuffer dest) throws SSLException {
         do {
             SSLEngineResult result = src.unwrap(mSSLEngine, dest);
             switch (result.getStatus()) {
@@ -63,7 +64,7 @@ class SSLActiveState extends SSLBaseState {
     }
 
     @Override
-    public OpResult stepWrap(NetReader src, NetBuffer dest) {
+    public OpResult stepWrap(NetReader src, NetBuffer dest) throws SSLException {
         do {
             SSLEngineResult result = src.wrap(mSSLEngine, dest);
             switch (result.getStatus()) {
@@ -79,8 +80,9 @@ class SSLActiveState extends SSLBaseState {
                     break;
 
                 case BUFFER_UNDERFLOW:
-                    // We're out of src data to wrap, so we're done wrapping
-                    // for now.
+                    // We're out of src data to wrap, so we're done wrapping for now.  Since this
+                    // is application data, trigger any recv callbacks as soon as possible, hence
+                    // drain the dest buffer.
                     return OpResult.DRAIN_DEST_BUFFER;
 
                 case CLOSED:
