@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLSession;
 
 /**
@@ -25,17 +26,20 @@ import javax.net.ssl.SSLSession;
  * only calling application callbacks during the ACTIVE state.
  */
 
-// TODO: check buffer resizing.  Do you need to compact anything?
+// TODO: buffer resizing can be optimized by compacting data and continuing to wrap/unwrap
+// rather than flushing to the network.
 // TODO: hide prepareRead/prepareAppend in NetBuffer.
 class SSLNonBlockingConnection implements AsyncConnection {
     private enum ConnState {
         ACTIVE,
         CLOSED,
+        // Close-related handshaking is in progress.
         CLOSING,
     }
 
     private enum StepState {
         CLOSE,
+        TASKS,
         WAITING,
         WRAP,
         UNWRAP,
@@ -89,11 +93,15 @@ class SSLNonBlockingConnection implements AsyncConnection {
     // Unwrapped data from the network.
     private NetBuffer mInAppBuffer;
 
-    // Unwrapped data destined to the network.
+    // This is the internal buffer that is accessible to applications via getOutBuffer().
+    // It is always in read mode.  (Applications will manipulate the underlying ByteBuffer
+    // directly via getOutBuffer().)
     private NetBuffer mOutAppBufferInternal;
 
     // Always points to the NetReader for the current read.  This may point to the internal
     // mOutAppBufferInternal or some external buffer provided by the application.
+    //
+    // This holds unwrapped data destined to the network.
     private NetReader mOutAppReader;
 
     // These callbacks are provided by the application
@@ -105,16 +113,18 @@ class SSLNonBlockingConnection implements AsyncConnection {
     // true if the app requested persistent receive callbacks.
     private boolean mAppRecvIsPersistent;
 
+    // This is set when an application desires an unwrap via a recv method.  It is cleared
+    // by stepUnwrap().
+    private boolean mAppRequestUnwrap;
+
+    // This is set when an application desires a wrap via a send method.  It is cleared by
+    // stepWrap().
+    private boolean mAppRequestWrap;
+
     // true if the SSLNonBlockingConnection is awaiting an explicit recv call from the app layer
     // for unwrapping to continue.  The underlying NonBlockingConnection's receive will be inactive
     // when this is true.  It will be rescheduled by the recv method.
     private boolean mNeedsAppRecv;
-
-    // This is set when an application desires an unwrap via a recv method.
-    private boolean mAppRequestUnwrap;
-
-    // This is set when an application desires a wrap via a send method.
-    private boolean mAppRequestWrap;
 
     private AsyncConnection.OnCloseCallback mNetCloseCallback =
         new AsyncConnection.OnCloseCallback() {
@@ -164,15 +174,16 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mSelectTaskQueue = nonBlockingTaskQueue;
 
         // We'll assign the internal in and out buffers using sizes from the
-        // SSLSession.
+        // SSLEngine's SSLSession.
         mConn = new NonBlockingConnection(selector, chan, null, null);
 
         SSLContext ctx = SSLContext.getInstance(sSSLProtocol);
         mSSLEngine = ctx.createSSLEngine();
 
         mBufFactory = bufFactory;
-        mActiveState = new SSLActiveState();
-        mHandshakeState = new SSLHandshakeState();
+
+        mActiveState = new SSLActiveState(mSSLEngine);
+        mHandshakeState = new SSLHandshakeState(mSSLEngine);
 
         // Start in the handshake state.
         mCurrState = mHandshakeState;
@@ -184,23 +195,22 @@ class SSLNonBlockingConnection implements AsyncConnection {
         int netSize = session.getPacketBufferSize();
         ByteBuffer inNetBuf = bufFactory.make(netSize);
         mConn.setInBufferInternal(inNetBuf);
-        mInNetBuffer = new NonBlockingConnectionInNetBuffer(mConn, inNetBuf);
+        mInNetBuffer = new NonBlockingConnectionInNetBuffer(mConn);
 
         // This holds cipher data going to the network.
         ByteBuffer outNetBuf = bufFactory.make(netSize);
         mConn.setOutBufferInternal(outNetBuf);
-        mOutNetBuffer = new NonBlockingConnectionOutNetBuffer(mConn, outNetBuf);
+        mOutNetBuffer = new NonBlockingConnectionOutNetBuffer(mConn);
 
         int appSize = session.getApplicationBufferSize();
-        mInAppBuffer = new NetBuffer(bufFactory.make(appSize));
-        mOutAppBufferInternal = new NetBuffer(bufFactory.make(appSize));
+        mInAppBuffer = NetBuffer.makeAppendBuffer(bufFactory.make(appSize));
+        mOutAppBufferInternal = NetBuffer.makeReadBuffer(bufFactory.make(appSize));
 
         // Set up callbacks.
         mConn.setOnCloseCallback(mNetCloseCallback);
         mConn.setOnErrorCallback(mNetErrorCallback);
 
         // Initially, we have an empty app buffer so that no wrapping will occcur.
-        mOutAppBufferInternal.prepareRead();
         mOutAppReader = mOutAppBufferInternal;
     }
 
@@ -228,6 +238,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mSSLEngine.closeInbound();
         mSSLEngine.closeOutbound();
 
+        // According to the documentation, only wrap needs to be called.  Thus, we do not worry
+        // about the NEED_TASK status, which is not handled by startHandshake.
         startHandshake();
     }
 
@@ -254,6 +266,14 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void dispatch(StepState initState) {
+        try {
+            dispatchImpl(initState);
+        } catch (SSLException e) {
+            onNetError(null, e.toString());
+        }
+    }
+
+    private void dispatchImpl(StepState initState) throws SSLException {
         StepState state = initState;
         do {
             StepState nextState = step(state);
@@ -262,32 +282,23 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 break;
             }
 
-            if (nextState == WAITING) {
-                // Resolve any callbacks that might have occurred.  Callbacks set oprequests.
-                // stepUnwrap and stepWrap clear the oprequests.
-                if (mAppRequestWrap) {
-                    nextState = StepState.WRAP;
-                } else if (mAppRequestUnwrap) {
-                    nextState = StepState.UNWRAP;
-                } else {
-                    break;
-                }
-            }
-
             if (nextState == CLOSE) {
+                // We cannot handshake further.  Shut down everything before the callback, which
+                // might attempt to call close().
+                closeImmediately();
+
                 if (mAppCloseCallback != null) {
                     mAppCloseCallback.onClose(this);
                 }
-
-                closeImmediately();
                 break;
             }
 
             if (nextState == TASKS) {
                 // mTasksDoneCallback will be called when all tasks are completed.
-                // It will be called in another thread.  However, mTasksDoneCallback
-                // calls onTaskDone(), which always runs in the selector thread (the same
-                // as this event handler).
+                // It will be called in another thread.  mTasksDoneCallback then
+                // calls onTasksDone(), which always runs in the selector thread (the same
+                // as this event handler).  Thus, onTasksDone() will only be called after this
+                // method exits.
                 if (scheduleHandshakeTasks(mTasksDoneCallback)) {
                     // Pause all persistent events until the task is completed.
                     mConn.cancelRecv();
@@ -298,6 +309,18 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 // is already outstanding and an asynchronous send callback arrives, since we
                 // do not cancel outstanding sends.  Just wait.
                 break;
+            }
+
+            if (nextState == WAITING) {
+                // Resolve any callbacks that might have occurred.  Callbacks set wrap and unwrap
+                // requests.  stepUnwrap and stepWrap clear these requests.
+                if (mAppRequestWrap) {
+                    nextState = StepState.WRAP;
+                } else if (mAppRequestUnwrap) {
+                    nextState = StepState.UNWRAP;
+                } else {
+                    break;
+                }
             }
 
             state = nextState;
@@ -318,6 +341,22 @@ class SSLNonBlockingConnection implements AsyncConnection {
         return mSSLEngine;
     }
 
+    private void onNetClose(AsyncConnection conn) {
+        // We cannot handshake with a closed connection, so just shutdown everything.
+        closeImmediately();
+
+        // Pass up the call chain to adhere to the close protocol.
+        if (mAppCloseCallback != null) {
+            mAppCloseCallback.onClose(this);
+        }
+    }
+
+    private void onNetError(AsyncConnection conn, String reason) {
+        if (mAppErrorCallback != null) {
+            mAppErrorCallback.onError(this, reason);
+        }
+    }
+
     private void onNetRecv(AsyncConnection conn, ByteBuffer buf) {
         dispatch(UNWRAP);
     }
@@ -333,7 +372,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
     /**
      * NOTE: this must always be called from the main selector thread.
      */
-    private void onTaskDone() {
+    private void onTasksDone() {
         start();
     }
 
@@ -343,7 +382,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void recvImpl(OnRecvCallback callback, boolean isPersistent)
-        throws IllegalArgumentException {
+            throws IllegalArgumentException {
         if (callback == null) {
             throw new IllegalArgumentException();
         }
@@ -375,7 +414,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
     @Override
     public void send(OnSendCallback callback, ByteBuffer buf) throws IllegalArgumentException {
-        NetReader reader = NetBuffer.makeReader(buf);
+        NetReader reader = NetBuffer.makeReadBuffer(buf);
         sendImpl(callback, reader);
     }
 
@@ -404,6 +443,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
     /**
      * For now, this is just equivalent to send().
+     *
+     * TODO: implement this?
      */
     @Override
     public void sendPartial(OnSendCallback callback) throws IllegalArgumentException {
@@ -462,6 +503,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
         startHandshake();
     }
 
+    /**
+     * Queries the handshake status and wraps or unwraps accordingly.  NEED_TASK requests are NOT
+     * handled.
+     */
     private void startHandshake() {
         switch (mSSLEngine.getHandshakeStatus()) {
             case FINISHED:
@@ -481,9 +526,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
     }
 
-    private StepState step(StepState state) {
+    private StepState step(StepState state) throws SSLException {
         switch (state) {
             case CLOSE:
+            case TASKS:
             case WAITING:
                 return state;
 
@@ -497,17 +543,16 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
     /**
      * @return the next StepState as a result of the step.
+     *
+     * @throws SSLException
      */
-    private StepState stepUnwrap() {
+    private StepState stepUnwrap() throws SSLException {
         do {
             // We are handling unwraps here.  Because we continue wrapping after draining
             // mInAppBuffer, it's necessary to clear the flag on each iteration; otherwise,
             // a nested recv call's unwrap request flag will not be turned off despite
             // being handled by the loop.
             mAppRequestUnwrap = false;
-
-            mInNetBuffer.prepareRead();
-            mInAppBuffer.prepareAppend();
 
             OpResult result = mCurrState.stepUnwrap(mInNetBuffer, mInAppBuffer);
             switch (result) {
@@ -555,12 +600,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 case ENGINE_CLOSE:
                     return StepState.CLOSE;
 
-                case UNWRAP_LOAD_SRC_BUFFER:
-                    mInNetBuffer.prepareAppend();
-
-                    /* A persistent receive is already configured.  Wait for it. */
-                    return StepState.WAITING;
-
                 case SCHEDULE_TASKS:
                     return StepState.TASKS;
 
@@ -574,22 +613,34 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 case STATE_CHANGE:
                     swapState();
                     break;
+
+                case UNWRAP_LOAD_SRC_BUFFER:
+                    mInNetBuffer.prepareAppend();
+
+                    /* A persistent receive is already configured.  Wait for it. */
+                    return StepState.WAITING;
             }
         } while (true);
     }
 
     /**
      * @return the next StepState as a result of the step.
+     *
+     * @throws SSLException
      */
-    private StepState stepWrap() {
+    private StepState stepWrap() throws SSLException {
         // See if we are done reading the source buffer and have flushed its wrapped content to the
         // network.  Such a situation indicates send completion, which triggers a callback.
         //
         // This should be checked before we wrap any further.
+
+        mOutNetBuffer.prepareRead();
         if (mAppSendCallback != null &&
                 mOutNetBuffer.isEmpty() &&
                 mOutAppReader.isEmpty()) {
-            // Prepare for the send callback, which is never persistent.
+            // We have encountered send completion: all outgoing app data has been wrapped
+            // and the send buffer has been flushed.  Prepare for the send callback, which is never
+            // persistent.
             AsyncConnection.OnSendCallback callback = mAppSendCallback;
             mAppSendCallback = null;
 
@@ -598,8 +649,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
 
         if (mOutNetBuffer.isEmpty()) {
-            // We've flushed all wrapped data to the network (or have an empty buffer).  Prepare for new
-            // data.
+            // We've flushed all wrapped data to the network (or have an empty buffer).  Prepare
+            // for new data.
             mOutNetBuffer.clear();
         }
 
@@ -623,10 +674,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 case ENGINE_CLOSE:
                     return StepState.CLOSE;
 
-                case UNWRAP_LOAD_SRC_BUFFER:
-                    // This is never called.
-                    throw RuntimeException("UNWRAP_LOAD_SRC_BUFFER should not occur when wrapping");
-
                 case SCHEDULE_TASKS:
                     return StepState.TASKS;
 
@@ -640,6 +687,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 case STATE_CHANGE:
                     swapState();
                     break;
+
+                case UNWRAP_LOAD_SRC_BUFFER:
+                    // This is never called.
+                    throw RuntimeException("UNWRAP_LOAD_SRC_BUFFER should not occur when wrapping");
             }
         } while (true);
     }
