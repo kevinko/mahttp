@@ -105,7 +105,7 @@ class NetBuffer implements NetReader {
      * be flipped so that its position will be the limit and the new limit
      * will be its capacity.
      */
-    void prepareAppend() {
+    public void prepareAppend() {
         if (mState == APPEND) {
             return;
         }
@@ -122,7 +122,7 @@ class NetBuffer implements NetReader {
      * This should be called after a network channel append completes.
      * It prepares (flips) the buffer for reading from the start of unread data.
      */
-    private void prepareRead() {
+    public void prepareRead() {
         if (mState == READ) {
             return;
         }
