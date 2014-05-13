@@ -62,7 +62,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
                     public void run() {
                         onTasksDone();
                     }
-                }
+                });
             }
         };
 
@@ -154,7 +154,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
         new AsyncConnection.OnSendCallback() {
             @Override
             public void onSend(AsyncConnection conn) {
-                onNetSend(conn, buf);
+                onNetSend(conn);
             }
         };
 
@@ -169,7 +169,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
     public SSLNonBlockingConnection(Selector selector, SocketChannel chan,
             ByteBufferFactory bufFactory, SelectTaskQueue nonBlockingTaskQueue)
             throws IOException, NoSuchAlgorithmException {
-        mConnState = ACTIVE;
+        mConnState = ConnState.ACTIVE;
 
         mSelectTaskQueue = nonBlockingTaskQueue;
 
@@ -182,8 +182,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
         mBufFactory = bufFactory;
 
-        mActiveState = new SSLActiveState(mSSLEngine);
-        mHandshakeState = new SSLHandshakeState(mSSLEngine);
+        mActiveState = new SSLActiveState(bufFactory, mSSLEngine);
+        mHandshakeState = new SSLHandshakeState(bufFactory, mSSLEngine);
 
         // Start in the handshake state.
         mCurrState = mHandshakeState;
@@ -250,11 +250,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * which would prevent handshaking from proceeding.
      */
     private void closeImmediately() throws IOException {
-        if (mConnState == CLOSED) {
+        if (mConnState == ConnState.CLOSED) {
             return;
         }
 
-        mState = ConnState.CLOSED;
+        mConnState = ConnState.CLOSED;
 
         mConn.close();
 
@@ -268,12 +268,12 @@ class SSLNonBlockingConnection implements AsyncConnection {
     private void dispatch(StepState initState) {
         try {
             dispatchImpl(initState);
-        } catch (SSLException e) {
+        } catch (IOException e) {
             onNetError(null, e.toString());
         }
     }
 
-    private void dispatchImpl(StepState initState) throws SSLException {
+    private void dispatchImpl(StepState initState) throws IOException {
         StepState state = initState;
         do {
             StepState nextState = step(state);
@@ -282,7 +282,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 break;
             }
 
-            if (nextState == CLOSE) {
+            if (nextState == StepState.CLOSE) {
                 // We cannot handshake further.  Shut down everything before the callback, which
                 // might attempt to call close().
                 closeImmediately();
@@ -293,7 +293,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 break;
             }
 
-            if (nextState == TASKS) {
+            if (nextState == StepState.TASKS) {
                 // mTasksDoneCallback will be called when all tasks are completed.
                 // It will be called in another thread.  mTasksDoneCallback then
                 // calls onTasksDone(), which always runs in the selector thread (the same
@@ -311,7 +311,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 break;
             }
 
-            if (nextState == WAITING) {
+            if (nextState == StepState.WAITING) {
                 // Resolve any callbacks that might have occurred.  Callbacks set wrap and unwrap
                 // requests.  stepUnwrap and stepWrap clear these requests.
                 if (mAppRequestWrap) {
@@ -342,8 +342,15 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void onNetClose(AsyncConnection conn) {
-        // We cannot handshake with a closed connection, so just shutdown everything.
-        closeImmediately();
+        // We cannot handshake with a closed connection, so just shut everything down.
+        try {
+            closeImmediately();
+        } catch (IOException e) {
+            if (mAppErrorCallback != null) {
+                mAppErrorCallback.onError(this, e.getMessage());
+                return;
+            }
+        }
 
         // Pass up the call chain to adhere to the close protocol.
         if (mAppCloseCallback != null) {
@@ -358,7 +365,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void onNetRecv(AsyncConnection conn, ByteBuffer buf) {
-        dispatch(UNWRAP);
+        dispatch(StepState.UNWRAP);
     }
 
     /**
@@ -366,7 +373,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * is usually called after data is completely sent.
      */
     private void onNetSend(AsyncConnection conn) {
-        dispatch(WRAP);
+        dispatch(StepState.WRAP);
     }
 
     /**
@@ -494,7 +501,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     public void start() {
-        if (mConnState == CLOSED) {
+        if (mConnState == ConnState.CLOSED) {
             return;
         }
 
@@ -531,7 +538,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
             case CLOSE:
             case TASKS:
             case WAITING:
-                return state;
+                break;
 
             case UNWRAP:
                 return stepUnwrap();
@@ -539,6 +546,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
             case WRAP:
                 return stepWrap();
         }
+
+        return state;
     }
 
     /**
@@ -554,7 +563,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
             // being handled by the loop.
             mAppRequestUnwrap = false;
 
-            OpResult result = mCurrState.stepUnwrap(mInNetBuffer, mInAppBuffer);
+            SSLState.OpResult result = mCurrState.stepUnwrap(mInNetBuffer, mInAppBuffer);
             switch (result) {
                 case NONE:
                     return StepState.WAITING;
@@ -660,7 +669,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
         do {
             mOutNetBuffer.prepareAppend();
 
-            OpResult result = mCurrState.stepWrap(mOutAppReader, mOutNetBuffer);
+            SSLState.OpResult result = mCurrState.stepWrap(mOutAppReader, mOutNetBuffer);
             switch (result) {
                 case NONE:
                     return StepState.WAITING;
@@ -690,7 +699,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
                 case UNWRAP_LOAD_SRC_BUFFER:
                     // This is never called.
-                    throw RuntimeException("UNWRAP_LOAD_SRC_BUFFER should not occur when wrapping");
+                    throw new RuntimeException(
+                            "UNWRAP_LOAD_SRC_BUFFER should not occur when wrapping");
             }
         } while (true);
     }
