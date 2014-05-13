@@ -3,6 +3,8 @@
 package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 
 class ArrayNetReader implements NetReader {
@@ -28,11 +30,23 @@ class ArrayNetReader implements NetReader {
     }
 
     public SSLEngineResult unwrapUnsafe(SSLEngine engine, NetBuffer dest) throws SSLException {
-        SSLEngineResult result = engine.unwrap(mBufArray.getBuffers(),
-                mBufArray.getNonEmptyOffset(), mBufArray.getNonEmptyLength(),
-                dest);
-        mBufArray.update();
-        return result;
+        ByteBuffer[] srcBufs = mBufArray.getBuffers();
+        ByteBuffer destBuf = dest.getByteBuffer();
+
+        do {
+            ByteBuffer currBuf = srcBufs[mBufArray.getNonEmptyOffset()];
+
+            SSLEngineResult result = engine.unwrap(currBuf, destBuf);
+            mBufArray.update();
+
+            if (!mBufArray.hasRemaining() ||
+                    result.getHandshakeStatus() != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING ||
+                    result.getStatus() != SSLEngineResult.Status.OK) {
+                return result;
+            }
+
+            // Otherwise, we unwrapped some data with an OK result; continue unwrapping.
+        } while (true);
     }
 
     public void updateRead() {
@@ -47,7 +61,7 @@ class ArrayNetReader implements NetReader {
     public SSLEngineResult wrapUnsafe(SSLEngine engine, NetBuffer dest) throws SSLException {
         SSLEngineResult result = engine.wrap(mBufArray.getBuffers(),
                 mBufArray.getNonEmptyOffset(), mBufArray.getNonEmptyLength(),
-                dest);
+                dest.getByteBuffer());
         mBufArray.update();
         return result;
     }
