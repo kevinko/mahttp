@@ -47,6 +47,15 @@ class NetBuffer implements NetReader {
     }
 
     /**
+     * Prepares buf for APPEND mode initially.
+     *
+     * @param buf
+     */
+    protected NetBuffer(ByteBuffer buf) {
+        this(State.APPEND, buf);
+    }
+
+    /**
      * This wraps and manages buf.  It is assumed that buf is positioned according to state.
      *
      * @param state
