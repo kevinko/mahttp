@@ -28,7 +28,6 @@ import javax.net.ssl.SSLSession;
 
 // TODO: buffer resizing can be optimized by compacting data and continuing to wrap/unwrap
 // rather than flushing to the network.
-// TODO: hide prepareRead/prepareAppend in NetBuffer.
 class SSLNonBlockingConnection implements AsyncConnection {
     private enum ConnState {
         ACTIVE,
