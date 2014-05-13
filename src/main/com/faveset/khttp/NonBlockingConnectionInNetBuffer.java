@@ -13,6 +13,9 @@ import java.nio.ByteBuffer;
 class NonBlockingConnectionInNetBuffer extends NetBuffer {
     private NonBlockingConnection mConn;
 
+    /**
+     * conn's buffer must be cleared (or newly allocated).
+     */
     public NonBlockingConnectionInNetBuffer(NonBlockingConnection conn) {
         super(conn.getInBuffer());
 
