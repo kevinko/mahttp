@@ -4,6 +4,7 @@ package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 
 interface NetReader {
