@@ -3,6 +3,7 @@
 package com.faveset.khttp;
 
 import java.nio.ByteBuffer;
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 
@@ -31,7 +32,7 @@ class NetBuffer implements NetReader {
      * @param buf must already be positioned for appending.
      */
     public static NetBuffer makeAppendBuffer(ByteBuffer buf) {
-        return new NetBuffer(APPEND, buf);
+        return new NetBuffer(State.APPEND, buf);
     }
 
     /**
@@ -40,7 +41,7 @@ class NetBuffer implements NetReader {
      * @param buf must already be flipped for reading.
      */
     public static NetBuffer makeReadBuffer(ByteBuffer buf) {
-        NetBuffer netBuf = new NetBuffer(READ, buf);
+        NetBuffer netBuf = new NetBuffer(State.READ, buf);
         netBuf.mStartPos = buf.position();
         return netBuf;
     }
@@ -84,8 +85,8 @@ class NetBuffer implements NetReader {
      */
     @Override
     public boolean isEmpty() {
-        if (mState == READ) {
-            return !(mbuf.hasRemaining());
+        if (mState == State.READ) {
+            return !(mBuf.hasRemaining());
         }
         return (mBuf.position() == mStartPos);
     }
@@ -106,7 +107,7 @@ class NetBuffer implements NetReader {
      * will be its capacity.
      */
     public void prepareAppend() {
-        if (mState == APPEND) {
+        if (mState == State.APPEND) {
             return;
         }
 
@@ -115,7 +116,7 @@ class NetBuffer implements NetReader {
         mBuf.position(mBuf.limit());
         mBuf.limit(mBuf.capacity());
 
-        mState = APPEND;
+        mState = State.APPEND;
     }
 
     /**
@@ -123,7 +124,7 @@ class NetBuffer implements NetReader {
      * It prepares (flips) the buffer for reading from the start of unread data.
      */
     public void prepareRead() {
-        if (mState == READ) {
+        if (mState == State.READ) {
             return;
         }
 
@@ -132,7 +133,7 @@ class NetBuffer implements NetReader {
         // Adjust to the start of unread data.
         mBuf.position(mStartPos);
 
-        mState = READ;
+        mState = State.READ;
     }
 
     /**
@@ -153,7 +154,7 @@ class NetBuffer implements NetReader {
         ByteBuffer newBuf = factory.make(size);
         mStartPos = 0;
 
-        if (mState == APPEND) {
+        if (mState == State.APPEND) {
             mBuf.flip();
             mBuf.position(mStartPos);
 
@@ -222,7 +223,7 @@ class NetBuffer implements NetReader {
      */
     @Override
     public void updateRead() {
-        if (mState != READ) {
+        if (mState != State.READ) {
             return;
         }
 
@@ -243,7 +244,7 @@ class NetBuffer implements NetReader {
         prepareRead();
         dest.prepareAppend();
 
-        return mSSLEngine.wrap(mBuf, dest);
+        return engine.wrap(mBuf, dest.getByteBuffer());
     }
 
     /**
@@ -254,6 +255,6 @@ class NetBuffer implements NetReader {
      * @throws SSLException
      */
     public SSLEngineResult wrapUnsafe(SSLEngine engine, NetBuffer dest) throws SSLException {
-        return mSSLEngine.wrap(mBuf, dest);
+        return engine.wrap(mBuf, dest.getByteBuffer());
     }
 }
