@@ -3,12 +3,19 @@
 package com.faveset.khttp;
 
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 
 class SSLHandshakeState extends SSLBaseState {
     private SSLEngine mSSLEngine;
 
-    public SSLHandshakeState(SSLEngine engine) {
+    /**
+     * @param factory the factory for allocating new ByteBuffers (when resizing)
+     * @param engine
+     */
+    public SSLHandshakeState(ByteBufferFactory factory, SSLEngine engine) {
+        super(factory);
+
         mSSLEngine = engine;
     }
 

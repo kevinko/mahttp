@@ -13,7 +13,13 @@ import javax.net.ssl.SSLException;
 class SSLActiveState extends SSLBaseState {
     private SSLEngine mSSLEngine;
 
-    public SSLActiveState(SSLEngine engine) {
+    /**
+     * @param factory the factory for allocating new ByteBuffers (when resizing)
+     * @param engine
+     */
+    public SSLActiveState(ByteBufferFactory factory, SSLEngine engine) {
+        super(factory);
+
         mSSLEngine = engine;
     }
 
@@ -47,7 +53,7 @@ class SSLActiveState extends SSLBaseState {
                     return OpResult.UNWRAP_LOAD_SRC_BUFFER;
 
                 case CLOSED:
-                    return ENGINE_CLOSE;
+                    return OpResult.ENGINE_CLOSE;
 
                 case OK:
                     src.updateRead();
@@ -57,7 +63,7 @@ class SSLActiveState extends SSLBaseState {
                     break;
             }
 
-            if (result.getHandshakeStatus() != NOT_HANDSHAKING) {
+            if (result.getHandshakeStatus() != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
                 return OpResult.STATE_CHANGE;
             }
         } while (true);
@@ -95,7 +101,7 @@ class SSLActiveState extends SSLBaseState {
                     break;
             }
 
-            if (result.getHandshakeStatus() != NOT_HANDSHAKING) {
+            if (result.getHandshakeStatus() != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
                 return OpResult.STATE_CHANGE;
             }
         } while (true);

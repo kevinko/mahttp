@@ -5,6 +5,15 @@ package com.faveset.khttp;
 import javax.net.ssl.SSLException;
 
 abstract class SSLBaseState implements SSLState {
+    private ByteBufferFactory mFactory;
+
+    /**
+     * @param factory the factory for allocating new ByteBuffers.
+     */
+    protected SSLBaseState(ByteBufferFactory factory) {
+        mFactory = factory;
+    }
+
     /**
      * @param buf the overflowed buffer
      * @param newBufSize the new buffer size that is needed by the SSLEngine.
@@ -13,7 +22,7 @@ abstract class SSLBaseState implements SSLState {
      * Otherwise, the buffer was resized (or cleared) and any operations
      * should be retried.
      */
-    protected static boolean resizeOverflowedBuffer(NetBuffer buf, int newBufSize) {
+    protected boolean resizeOverflowedBuffer(NetBuffer buf, int newBufSize) {
         if (!buf.isEmpty()) {
             return false;
         }
@@ -28,10 +37,10 @@ abstract class SSLBaseState implements SSLState {
         // At this point, the buffer is empty and cleared.
         // A resize must be necessary.
         if (!buf.needsResize(newBufSize)) {
-            throw RuntimeException("expected buffer resize but not possible");
+            throw new RuntimeException("expected buffer resize but not possible");
         }
 
-        buf.resizeUnsafe(newBufSize);
+        buf.resizeUnsafe(mFactory, newBufSize);
 
         return true;
     }
