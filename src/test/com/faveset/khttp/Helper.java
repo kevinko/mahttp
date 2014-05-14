@@ -11,11 +11,91 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
 class Helper {
+    public static abstract class AsyncConnectionTester {
+        // Time to force a stop during testing.  0 to disable.
+        private long mStopTime;
+
+        private Helper.ServerThread.Task mServerTask;
+        private int mBufferSize;
+        private int mListenPort;
+
+        /**
+         * @param bufferSize will be passed to the NonBlockingConnection.
+         */
+        protected AsyncConnectionTester(int listenPort,
+                Helper.ServerThread.Task serverTask, int bufferSize) {
+            mListenPort = listenPort;
+            mServerTask = serverTask;
+            mBufferSize = bufferSize;
+        }
+
+        protected abstract AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize) throws IOException;
+
+        protected abstract void prepareConn(AsyncConnection conn);
+
+        protected void finish() {}
+
+        protected void onStop(AsyncConnection conn) {}
+
+        public void run() throws IOException, InterruptedException {
+            Object signal = new Object();
+            Helper.ServerThread server = new Helper.ServerThread(mListenPort, signal, mServerTask);
+            server.start();
+
+            synchronized (signal) {
+                signal.wait();
+            }
+
+            final Selector selector = Selector.open();
+            SocketChannel chan = Helper.connect(mListenPort);
+            AsyncConnection conn = makeConn(selector, chan, mBufferSize);
+
+            prepareConn(conn);
+
+            while (true) {
+                // We busy wait here, since we want to stop as soon as all keys
+                // are cancelled.
+                selector.selectNow();
+                if (selector.keys().size() == 0) {
+                    break;
+                }
+                if (mStopTime != 0 && mStopTime < System.currentTimeMillis()) {
+                    onStop(conn);
+                    break;
+                }
+
+                Set<SelectionKey> readyKeys = selector.selectedKeys();
+
+                for (SelectionKey key : readyKeys) {
+                    SelectorHandler handler = (SelectorHandler) key.attachment();
+                    handler.onReady(key);
+                }
+            }
+
+            selector.close();
+
+            server.join();
+
+            finish();
+        }
+
+        /**
+         * Stop the test after millis milliseconds from now.
+         */
+        public void delayedStop(int millis) {
+            long now = System.currentTimeMillis();
+            mStopTime = now + millis;
+        }
+    }
+
     public static class ServerThread extends Thread {
         public interface Task {
             void run(Socket sock);

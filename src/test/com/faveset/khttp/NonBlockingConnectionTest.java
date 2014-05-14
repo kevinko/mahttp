@@ -12,11 +12,9 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
-import java.util.Set;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -27,76 +25,14 @@ public class NonBlockingConnectionTest {
     private static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
     private static final int sListenPort = 4889;
 
-    private abstract class Tester {
-        // Time to force a stop during testing.  0 to disable.
-        private long mStopTime;
-
-        private Helper.ServerThread.Task mServerTask;
-        private int mBufferSize;
-
-        /**
-         * @param bufferSize will be passed to the NonBlockingConnection.
-         */
+    private abstract class Tester extends Helper.AsyncConnectionTester {
         public Tester(Helper.ServerThread.Task serverTask, int bufferSize) {
-            mServerTask = serverTask;
-            mBufferSize = bufferSize;
+            super(sListenPort, serverTask, bufferSize);
         }
 
-        protected abstract void prepareConn(NonBlockingConnection conn);
-
-        protected void finish() {}
-
-        protected void onStop(NonBlockingConnection conn) {
-        }
-
-        public void run() throws IOException, InterruptedException {
-            Object signal = new Object();
-            Helper.ServerThread server = new Helper.ServerThread(sListenPort, signal, mServerTask);
-            server.start();
-
-            synchronized (signal) {
-                signal.wait();
-            }
-
-            final Selector selector = Selector.open();
-            SocketChannel chan = Helper.connect(sListenPort);
-            NonBlockingConnection conn = new NonBlockingConnection(selector, chan, mBufferSize);
-
-            prepareConn(conn);
-
-            while (true) {
-                // We busy wait here, since we want to stop as soon as all keys
-                // are cancelled.
-                selector.selectNow();
-                if (selector.keys().size() == 0) {
-                    break;
-                }
-                if (mStopTime != 0 && mStopTime < System.currentTimeMillis()) {
-                    onStop(conn);
-                    break;
-                }
-
-                Set<SelectionKey> readyKeys = selector.selectedKeys();
-
-                for (SelectionKey key : readyKeys) {
-                    SelectorHandler handler = (SelectorHandler) key.attachment();
-                    handler.onReady(key);
-                }
-            }
-
-            selector.close();
-
-            server.join();
-
-            finish();
-        }
-
-        /**
-         * Stop the test after millis milliseconds from now.
-         */
-        public void delayedStop(int millis) {
-            long now = System.currentTimeMillis();
-            mStopTime = now + millis;
+        @Override
+        protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize) throws IOException {
+            return new NonBlockingConnection(selector, chan, bufferSize);
         }
     }
 
@@ -111,7 +47,9 @@ public class NonBlockingConnectionTest {
 
         Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.recvAppend(new AsyncConnection.OnRecvCallback() {
                     public void onRecv(AsyncConnection conn, ByteBuffer buf) {
                         try {
@@ -194,7 +132,9 @@ public class NonBlockingConnectionTest {
             }
 
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.recvAppendPersistent(makeRecvCallback(), extBuf);
             }
         };
@@ -209,7 +149,9 @@ public class NonBlockingConnectionTest {
 
         Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.recv(new AsyncConnection.OnRecvCallback() {
                     public void onRecv(AsyncConnection conn, ByteBuffer buf) {
                         try {
@@ -277,7 +219,9 @@ public class NonBlockingConnectionTest {
             }
 
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.recv(makeRecvCallback());
             }
         };
@@ -413,7 +357,9 @@ public class NonBlockingConnectionTest {
             }
 
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.recvPersistent(makeRecvCallback());
             }
         };
@@ -451,7 +397,9 @@ public class NonBlockingConnectionTest {
 
         Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 ByteBuffer buf = conn.getOutBuffer();
 
                 String s = expectedString;
@@ -480,7 +428,9 @@ public class NonBlockingConnectionTest {
 
         Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 ByteBuffer src = Helper.makeByteBuffer(expectedString);
 
                 conn.send(new AsyncConnection.OnSendCallback() {
@@ -517,7 +467,9 @@ public class NonBlockingConnectionTest {
             }
 
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.send(new AsyncConnection.OnSendCallback() {
                     public void onSend(AsyncConnection conn) {
                         try {
@@ -541,7 +493,9 @@ public class NonBlockingConnectionTest {
 
         Tester tester = new Tester(makeRecvTask(expectedString), len) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 ByteBuffer outBuf = conn.getOutBuffer();
                 outBuf.put(buf);
                 outBuf.flip();
@@ -592,7 +546,9 @@ public class NonBlockingConnectionTest {
             }
 
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
                     public void onClose(AsyncConnection conn) {
                         mCloseCount++;
@@ -641,7 +597,9 @@ public class NonBlockingConnectionTest {
             }
 
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
                     public void onClose(AsyncConnection conn) {
                         mCloseCount++;
@@ -709,7 +667,9 @@ public class NonBlockingConnectionTest {
             }
 
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 // This will hang if the implementation is correct, so set
                 // a delay.
                 delayedStop(1000);
@@ -758,7 +718,7 @@ public class NonBlockingConnectionTest {
             }
 
             @Override
-            protected void onStop(NonBlockingConnection conn) {
+            protected void onStop(AsyncConnection conn) {
                 super.onStop(conn);
                 try {
                     conn.close();
@@ -768,7 +728,9 @@ public class NonBlockingConnectionTest {
             }
 
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 // This will hang if the implementation is correct, so set
                 // a delay.
                 delayedStop(1000);
@@ -819,7 +781,9 @@ public class NonBlockingConnectionTest {
     public void testRecvNull() throws IOException, InterruptedException {
         Tester tester = new Tester(makeNullTask(), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.recv(null);
             }
         };
@@ -830,7 +794,9 @@ public class NonBlockingConnectionTest {
     public void testRecvPersistentNull() throws IOException, InterruptedException {
         Tester tester = new Tester(makeNullTask(), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.recvPersistent(null);
             }
         };
@@ -841,7 +807,9 @@ public class NonBlockingConnectionTest {
     public void testSendNull() throws IOException, InterruptedException {
         Tester tester = new Tester(makeNullTask(), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.send(null);
             }
         };
@@ -852,7 +820,9 @@ public class NonBlockingConnectionTest {
     public void testSendNull2() throws IOException, InterruptedException {
         Tester tester = new Tester(makeNullTask(), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.send(null, null);
             }
         };
@@ -863,7 +833,9 @@ public class NonBlockingConnectionTest {
     public void testSendNull3() throws IOException, InterruptedException {
         Tester tester = new Tester(makeNullTask(), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.send(null, null, 0);
             }
         };
@@ -874,7 +846,9 @@ public class NonBlockingConnectionTest {
     public void testSendPartialNull() throws IOException, InterruptedException {
         Tester tester = new Tester(makeNullTask(), 1024) {
             @Override
-            protected void prepareConn(NonBlockingConnection conn) {
+            protected void prepareConn(AsyncConnection connArg) {
+                NonBlockingConnection conn = (NonBlockingConnection) connArg;
+
                 conn.sendPartial(null);
             }
         };
