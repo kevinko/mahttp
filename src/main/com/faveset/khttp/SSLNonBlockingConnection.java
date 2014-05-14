@@ -164,9 +164,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * @param nonBlockingTaskQueue the task queue that runs in the event thread.  Tasks will be
      * submitted when it is desired to wake up the NonBlockingConnection after an SSL task thread
      * completes.
+     * @param ctx
      */
     public SSLNonBlockingConnection(Selector selector, SocketChannel chan,
-            ByteBufferFactory bufFactory, SelectTaskQueue nonBlockingTaskQueue)
+            ByteBufferFactory bufFactory, SelectTaskQueue nonBlockingTaskQueue, SSLContext ctx)
             throws IOException, NoSuchAlgorithmException {
         mConnState = ConnState.ACTIVE;
 
@@ -176,7 +177,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
         // SSLEngine's SSLSession.
         mConn = new NonBlockingConnection(selector, chan, null, null);
 
-        SSLContext ctx = SSLContext.getInstance(sSSLProtocol);
         mSSLEngine = ctx.createSSLEngine();
 
         mBufFactory = bufFactory;
