@@ -37,7 +37,8 @@ class Helper {
             mBufferSize = bufferSize;
         }
 
-        protected abstract AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize) throws IOException;
+        protected abstract AsyncConnection makeConn(Selector selector, SocketChannel chan,
+                int bufferSize, SelectTaskQueue taskQueue) throws IOException;
 
         protected abstract void prepareConn(AsyncConnection conn);
 
@@ -55,8 +56,10 @@ class Helper {
             }
 
             final Selector selector = Selector.open();
+            SelectTaskQueue taskQueue = new SelectTaskQueue(selector);
+
             SocketChannel chan = Helper.connect(mListenPort);
-            AsyncConnection conn = makeConn(selector, chan, mBufferSize);
+            AsyncConnection conn = makeConn(selector, chan, mBufferSize, taskQueue);
 
             prepareConn(conn);
 
@@ -65,8 +68,14 @@ class Helper {
                 // are cancelled.
                 selector.selectNow();
                 if (selector.keys().size() == 0) {
-                    break;
+                    if (!runTaskQueue(taskQueue)) {
+                        // No tasks, either.  We're done.
+                        break;
+                    }
+                } else {
+                    runTaskQueue(taskQueue);
                 }
+
                 if (mStopTime != 0 && mStopTime < System.currentTimeMillis()) {
                     onStop(conn);
                     break;
@@ -85,6 +94,19 @@ class Helper {
             server.join();
 
             finish();
+        }
+
+        private static boolean runTaskQueue(SelectTaskQueue queue) {
+            boolean hasTask = false;
+            do {
+                Runnable task = queue.poll();
+                if (task == null) {
+                    return hasTask;
+                }
+
+                hasTask = true;
+                task.run();
+            } while (true);
         }
 
         /**

@@ -31,7 +31,8 @@ public class NonBlockingConnectionTest {
         }
 
         @Override
-        protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize) throws IOException {
+        protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                SelectTaskQueue taskQueue) throws IOException {
             return new NonBlockingConnection(selector, chan, bufferSize);
         }
     }
