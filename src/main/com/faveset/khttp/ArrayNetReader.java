@@ -25,7 +25,7 @@ class ArrayNetReader implements NetReader {
 
     @Override
     public SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest) throws SSLException {
-        dest.prepareAppend();
+        dest.flipAppend();
         return unwrapUnsafe(engine, dest);
     }
 
@@ -54,7 +54,7 @@ class ArrayNetReader implements NetReader {
     }
 
     public SSLEngineResult wrap(SSLEngine engine, NetBuffer dest) throws SSLException {
-        dest.prepareAppend();
+        dest.flipAppend();
         return wrapUnsafe(engine, dest);
     }
 

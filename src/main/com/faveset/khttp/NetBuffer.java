@@ -12,7 +12,7 @@ import javax.net.ssl.SSLException;
  * position over multiple network operations.
  */
 class NetBuffer implements NetReader {
-    private enum State {
+    protected enum State {
         APPEND,
         READ,
     }
@@ -47,21 +47,12 @@ class NetBuffer implements NetReader {
     }
 
     /**
-     * Prepares buf for APPEND mode initially.
-     *
-     * @param buf
-     */
-    protected NetBuffer(ByteBuffer buf) {
-        this(State.APPEND, buf);
-    }
-
-    /**
      * This wraps and manages buf.  It is assumed that buf is positioned according to state.
      *
      * @param state
      * @param buf
      */
-    private NetBuffer(State state, ByteBuffer buf) {
+    protected NetBuffer(State state, ByteBuffer buf) {
         mState = state;
         mBuf = buf;
     }
@@ -72,6 +63,41 @@ class NetBuffer implements NetReader {
     public void clear() {
         mBuf.clear();
         mStartPos = 0;
+
+    /**
+     * Prepares the buffer for a network channel append.  The buffer will
+     * be flipped so that its position will be the limit and the new limit
+     * will be its capacity.
+     *
+     * Nothing will be done if the buffer is already in the APPEND state.
+     */
+    public void flipAppend() {
+        if (mState == State.APPEND) {
+            return;
+        }
+
+        // Flip the buffer so that new writes will appear at the end of the
+        // read buffer.
+        mBuf.position(mBuf.limit());
+        mBuf.limit(mBuf.capacity());
+
+        mState = State.APPEND;
+    }
+
+    /**
+     * This should be called after a network channel append completes.
+     * It prepares (flips) the buffer for reading from the start of unread data.
+     *
+     * Nothing will be done if the buffer is already in the read state.
+     */
+    public void flipRead() {
+        if (mState == State.READ) {
+            return;
+        }
+
+        mBuf.flip();
+
+        setRead();
     }
 
     /**
@@ -108,41 +134,6 @@ class NetBuffer implements NetReader {
      */
     public boolean needsResize(int size) {
         return (mBuf.capacity() < size);
-    }
-
-    /**
-     * Prepares the buffer for a network channel append.  The buffer will
-     * be flipped so that its position will be the limit and the new limit
-     * will be its capacity.
-     */
-    public void prepareAppend() {
-        if (mState == State.APPEND) {
-            return;
-        }
-
-        // Flip the buffer so that new writes will appear at the end of the
-        // read buffer.
-        mBuf.position(mBuf.limit());
-        mBuf.limit(mBuf.capacity());
-
-        mState = State.APPEND;
-    }
-
-    /**
-     * This should be called after a network channel append completes.
-     * It prepares (flips) the buffer for reading from the start of unread data.
-     */
-    public void prepareRead() {
-        if (mState == State.READ) {
-            return;
-        }
-
-        mBuf.flip();
-
-        // Adjust to the start of unread data.
-        mBuf.position(mStartPos);
-
-        mState = State.READ;
     }
 
     /**
@@ -191,8 +182,32 @@ class NetBuffer implements NetReader {
         if (mBuf.capacity() == size) {
             return;
         }
+
         mBuf = factory.make(size);
         mStartPos = 0;
+
+        if (mState == State.READ) {
+            // The newly resized buffer is empty.
+            mBuf.limit(mBuf.position());
+        }
+    }
+
+    /**
+     * Marks the buffer for appending.  It will not be flipped.
+     */
+    public void setAppend() {
+        mState = State.APPEND;
+    }
+
+    /**
+     * Marks the buffer for reading at the start of unread data.  It will not be flipped.  However,
+     * it will be positioned at the start of unread data.
+     */
+    public void setRead() {
+        // Adjust to the start of unread data.
+        mBuf.position(mStartPos);
+
+        mState = State.READ;
     }
 
     /**

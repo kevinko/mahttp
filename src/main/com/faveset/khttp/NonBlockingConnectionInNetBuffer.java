@@ -14,10 +14,11 @@ class NonBlockingConnectionInNetBuffer extends NetBuffer {
     private NonBlockingConnection mConn;
 
     /**
-     * conn's buffer must be cleared (or newly allocated).
+     * conn's buffer must be cleared (or newly allocated).  By default, the buffer will be
+     * configured for appending.
      */
     public NonBlockingConnectionInNetBuffer(NonBlockingConnection conn) {
-        super(conn.getInBuffer());
+        super(State.APPEND, conn.getInBuffer());
 
         mConn = conn;
     }
