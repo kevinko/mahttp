@@ -20,14 +20,14 @@ class NetBuffer implements NetReader {
     private State mState;
 
     // Tracks the starting position of the last unread data.  This persists
-    // so that we can resume reading from the start of the buffer despite a
-    // mix of appending and reading.
-    private int mStartPos;
+    // so that we can resume reading from the start of the buffer.  It is updated
+    // explicitly by updateRead().
+    private int mReadStartPos;
 
     private ByteBuffer mBuf;
 
     /**
-     * Wraps a ByteBuffer that is positioned for appending data to buf's current position.
+     * Wraps a ByteBuffer that is initially positioned for appending data to buf's current position.
      *
      * @param buf must already be positioned for appending.
      */
@@ -36,18 +36,17 @@ class NetBuffer implements NetReader {
     }
 
     /**
-     * Wraps a ByteBuffer that is positioned for a read.
+     * Wraps a ByteBuffer that is initially positioned for a read.
      *
      * @param buf must already be flipped for reading.
      */
     public static NetBuffer makeReadBuffer(ByteBuffer buf) {
-        NetBuffer netBuf = new NetBuffer(State.READ, buf);
-        netBuf.mStartPos = buf.position();
-        return netBuf;
+        return new NetBuffer(State.READ, buf);
     }
 
     /**
-     * This wraps and manages buf.  It is assumed that buf is positioned according to state.
+     * This wraps and manages buf.  It is assumed that buf is initially positioned according to
+     * state.
      *
      * @param state
      * @param buf
@@ -55,6 +54,10 @@ class NetBuffer implements NetReader {
     protected NetBuffer(State state, ByteBuffer buf) {
         mState = state;
         mBuf = buf;
+
+        if (state == State.READ) {
+            mReadStartPos = buf.position();
+        }
     }
 
     /**
@@ -62,12 +65,21 @@ class NetBuffer implements NetReader {
      */
     public void clear() {
         mBuf.clear();
-        mStartPos = 0;
+        mReadStartPos = 0;
+
+        if (mState == State.READ) {
+            // Make sure that remaining() is empty so that reads will be empty as well.
+            mBuf.limit(0);
+        }
+    }
 
     /**
      * Prepares the buffer for a network channel append.  The buffer will
      * be flipped so that its position will be the limit and the new limit
      * will be its capacity.
+     *
+     * This method is normally called prior to passing the underlying buffer to a channel that will
+     * write to the buffer.
      *
      * Nothing will be done if the buffer is already in the APPEND state.
      */
@@ -85,8 +97,12 @@ class NetBuffer implements NetReader {
     }
 
     /**
-     * This should be called after a network channel append completes.
-     * It prepares (flips) the buffer for reading from the start of unread data.
+     * This should be called after a network channel append completes before reading data from the
+     * buffer.  It flips the buffer for reading from the start of unread data, as determined by
+     * the last call to updateRead().
+     *
+     * This method is normally called after a channel has written data to the underlying ByteBuffer
+     * and before reading data from the underlying ByteBuffer.
      *
      * Nothing will be done if the buffer is already in the read state.
      */
@@ -96,11 +112,18 @@ class NetBuffer implements NetReader {
         }
 
         mBuf.flip();
+        mBuf.position(mReadStartPos);
 
-        setRead();
+        mState = State.READ;
     }
 
     /**
+     * This returns the underlying ByteBuffer.
+     *
+     * Use this or backwards compatibility with channel operations.  One must take care to ensure
+     * that read and append states are properly maintained (see
+     * setRead/setAppend/flipRead/flipAppend).
+     *
      * @return the underlying ByteBuffer.
      */
     protected ByteBuffer getByteBuffer() {
@@ -108,22 +131,42 @@ class NetBuffer implements NetReader {
     }
 
     /**
-     * @return true if the underlying buffer is cleared (ByteBuffer.clear()).
+     * A cleared append buffer has position 0 and limit == capacity.  Note that being cleared is a
+     * superset of being empty.  A cleared buffer is both empty and has a limit at full capacity
+     * when appending, which is equivalent to the state after a ByteBuffer.clear().
+     *
+     * A read buffer is temporarily flipped to append state before evaluating the condition.
+     *
+     * @return true if the underlying buffer is cleared for a subsequent append.
      */
     public boolean isCleared() {
-        return (mBuf.position() == 0 && mBuf.limit() == mBuf.capacity());
+        int pos = mBuf.position();
+        int limit = mBuf.limit();
+
+        if (mState == State.READ) {
+            // Imitate a flipAppend().
+            pos = mBuf.limit();
+            limit = mBuf.capacity();
+        }
+
+        return (pos == 0 && limit == mBuf.capacity());
     }
 
     /**
-     * @return true if the underlying buffer is empty with respect to its
-     * current state (read/append).
+     * An empty NetBuffer holds no content when reading.
+     *
+     * @return true if the underlying buffer is empty for any future read.
      */
     @Override
     public boolean isEmpty() {
         if (mState == State.READ) {
             return !(mBuf.hasRemaining());
         }
-        return (mBuf.position() == mStartPos);
+
+        // Immitate a flipRead().
+        int pos = mReadStartPos;
+        int limit = mBuf.position();
+        return (pos >= limit);
     }
 
     /**
@@ -134,6 +177,18 @@ class NetBuffer implements NetReader {
      */
     public boolean needsResize(int size) {
         return (mBuf.capacity() < size);
+    }
+
+    /**
+     * Sets the read position of the buffer to the last unread position based on the last call to
+     * updateRead().  This only takes effect if the NetBuffer is in read mode.
+     */
+    public void rewindRead() {
+        if (mState != State.READ) {
+            return;
+        }
+
+        mBuf.position(mReadStartPos);
     }
 
     /**
@@ -152,26 +207,28 @@ class NetBuffer implements NetReader {
         }
 
         ByteBuffer newBuf = factory.make(size);
-        mStartPos = 0;
 
         if (mState == State.APPEND) {
             mBuf.flip();
-            mBuf.position(mStartPos);
+            mBuf.position(mReadStartPos);
 
             newBuf.put(mBuf);
+
+            // newBuf is now positioned for future appends.
         } else {
             // Otherwise, READ.  We are already positioned to copy unread data.
             newBuf.put(mBuf);
 
-            // Adjust newBuf's pointers for future reads from the newly copied data.
+            // Adjust newBuf's pointers for future reads of the newly copied data.
             newBuf.flip();
         }
 
         mBuf = newBuf;
+        mReadStartPos = 0;
     }
 
     /**
-     * Resizes the underlying ByteBuffer given the size.
+     * Resizes the underlying ByteBuffer to the given size.
      * No attempt is made to preserve data, so the caller should take care
      * to make sure that the buffer is empty before resizing.
      *
@@ -184,29 +241,31 @@ class NetBuffer implements NetReader {
         }
 
         mBuf = factory.make(size);
-        mStartPos = 0;
+        mReadStartPos = 0;
 
         if (mState == State.READ) {
             // The newly resized buffer is empty.
-            mBuf.limit(mBuf.position());
+            mBuf.limit(0);
         }
     }
 
     /**
      * Marks the buffer for appending.  It will not be flipped.
+     *
+     * This is useful for adjusting a buffer that is automatically flipped by a connection
+     * callback.
      */
     public void setAppend() {
         mState = State.APPEND;
     }
 
     /**
-     * Marks the buffer for reading at the start of unread data.  It will not be flipped.  However,
-     * it will be positioned at the start of unread data.
+     * Marks the buffer for reading.  It will neither be flipped nor rewound.
+     *
+     * This is useful for adjusting a buffer that is automatically flipped by a connection
+     * callback.
      */
     public void setRead() {
-        // Adjust to the start of unread data.
-        mBuf.position(mStartPos);
-
         mState = State.READ;
     }
 
@@ -223,14 +282,14 @@ class NetBuffer implements NetReader {
      */
     @Override
     public SSLEngineResult unwrap(SSLEngine engine, NetBuffer dest) throws SSLException {
-        prepareRead();
-        dest.prepareAppend();
+        flipRead();
+        dest.flipAppend();
 
         return engine.unwrap(mBuf, dest.mBuf);
     }
 
     /**
-     * Unsafe variant of unwrap that does not prepare this or dest.
+     * Unsafe variant of unwrap that does not attempt to flip this or dest.
      *
      * @param engine
      * @param dest
@@ -241,9 +300,11 @@ class NetBuffer implements NetReader {
     }
 
     /**
-     * Updates read position pointers based on the ByteBuffer's state.
-     * This must be called after reading from the ByteBuffer to mark the
+     * Updates read position pointers based on the underlying ByteBuffer's state.
+     * This must be called after reading directly from the underyling ByteBuffer to mark the
      * starting position of unread data.
+     *
+     * It only takes effect if the NetBuffer is in a read state.
      */
     @Override
     public void updateRead() {
@@ -251,7 +312,7 @@ class NetBuffer implements NetReader {
             return;
         }
 
-        mStartPos = mBuf.position();
+        mReadStartPos = mBuf.position();
     }
 
     /**
@@ -265,8 +326,8 @@ class NetBuffer implements NetReader {
      */
     @Override
     public SSLEngineResult wrap(SSLEngine engine, NetBuffer dest) throws SSLException {
-        prepareRead();
-        dest.prepareAppend();
+        flipRead();
+        dest.flipAppend();
 
         return engine.wrap(mBuf, dest.getByteBuffer());
     }

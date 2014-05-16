@@ -38,15 +38,30 @@ public class NetBufferTest {
 
         buf.put((byte) 0);
 
-        // Test preservation when resizing.
+        buf.put((byte) 0);
+
+        // Read the first element to offset the buffer.
+        netBuf.flipRead();
+        try {
+            assertTrue(!netBuf.isEmpty());
+            assertEquals(0, buf.get());
+        } finally {
+            netBuf.updateRead();
+        }
+
+        netBuf.flipAppend();
+        assertEquals(3, buf.position());
+
+        // Test preservation when resizing.  This should compact the underlying buffer.
         ByteBufferFactory factory = new HeapByteBufferFactory();
         netBuf.resize(factory, 2048);
         buf = netBuf.getByteBuffer();
 
         assertEquals(2048, buf.capacity());
+        // The underlying buffer has been compacted.
         assertEquals(2, buf.position());
 
-        netBuf.prepareRead();
+        netBuf.flipRead();
 
         try {
             assertTrue(!netBuf.isEmpty());
@@ -61,7 +76,7 @@ public class NetBufferTest {
         }
 
         // Now, test appending, which should continue from where we finished reading.
-        netBuf.prepareAppend();
+        netBuf.flipAppend();
 
         assertEquals(2, buf.position());
 
@@ -69,7 +84,7 @@ public class NetBufferTest {
 
         buf.put((byte) 0);
 
-        netBuf.prepareRead();
+        netBuf.flipRead();
 
         // We should resume reading from the last unread position (2).
         assertEquals(2, buf.position());
@@ -77,6 +92,16 @@ public class NetBufferTest {
         assertTrue(netBuf.isEmpty());
 
         netBuf.resizeUnsafe(factory, 4096);
+        buf = netBuf.getByteBuffer();
         assertTrue(netBuf.isCleared());
+
+        // Test clearing.
+        netBuf.flipAppend();
+        buf.put((byte) 0);
+
+        netBuf.flipRead();
+        assertTrue(!netBuf.isEmpty());
+        netBuf.clear();
+        assertTrue(netBuf.isEmpty());
     }
 }
