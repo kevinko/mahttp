@@ -391,7 +391,14 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * NOTE: this must always be called from the main selector thread.
      */
     private void onTasksDone() {
-        start();
+        if (mConnState == ConnState.CLOSED) {
+            return;
+        }
+
+        // Restore the receive handler, which was paused for task processing.
+        mConn.recvAppendPersistent(mNetRecvCallback);
+
+        startHandshake();
     }
 
     @Override
