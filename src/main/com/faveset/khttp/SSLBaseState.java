@@ -15,14 +15,14 @@ abstract class SSLBaseState implements SSLState {
     }
 
     /**
-     * @param buf the overflowed buffer
+     * @param buf the overflowed append buffer
      * @param newBufSize the new buffer size that is needed by the SSLEngine.
      *
      * @return false if the buffer was not empty and should be drained.
      * Otherwise, the buffer was resized (or cleared) and any operations
      * should be retried.
      */
-    protected boolean resizeOverflowedBuffer(NetBuffer buf, int newBufSize) {
+    protected boolean resizeAppendBuffer(NetBuffer buf, int newBufSize) {
         if (!buf.isEmpty()) {
             return false;
         }

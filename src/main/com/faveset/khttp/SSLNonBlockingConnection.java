@@ -204,6 +204,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
         int appSize = session.getApplicationBufferSize();
         mInAppBuffer = NetBuffer.makeAppendBuffer(bufFactory.make(appSize));
         mOutAppBufferInternal = NetBuffer.makeReadBuffer(bufFactory.make(appSize));
+        // Ensure that the internal buffer is initially empty for mOutAppReader.
+        mOutAppBufferInternal.clear();
 
         // Set up callbacks.
         mConn.setOnCloseCallback(mNetCloseCallback);
@@ -364,6 +366,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void onNetRecv(AsyncConnection conn, ByteBuffer buf) {
+        // The onRecv callback will flip buf automatically.  Take that into account and continue
+        // reading where we left off.
+        mInNetBuffer.setRead();
+        mInNetBuffer.rewindRead();
+
         dispatch(StepState.UNWRAP);
     }
 
@@ -372,6 +379,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * is usually called after data is completely sent.
      */
     private void onNetSend(AsyncConnection conn) {
+        // AsyncConnection only triggers this callback when the outgoing net buffer has been
+        // completely flushed.  Update the NetBuffer state to ready it for future writes.
+        mOutNetBuffer.setAppend();
+        mOutNetBuffer.clear();
+
         dispatch(StepState.WRAP);
     }
 
@@ -504,6 +516,12 @@ class SSLNonBlockingConnection implements AsyncConnection {
             return;
         }
 
+        // Initialize network buffer state for receiving data via the underlying connection.
+        // Configure everything before the actual recv call, in case some data is populated
+        // immediately.
+        mInNetBuffer.setAppend();
+        mInNetBuffer.clear();
+
         mConn.recvAppendPersistent(mNetRecvCallback);
 
         startHandshake();
@@ -580,7 +598,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
                     }
 
                     // Otherwise, it's safe to flush mInAppBuffer to the app layer's recv callback.
-                    mInAppBuffer.prepareRead();
+                    mInAppBuffer.flipRead();
 
                     AsyncConnection.OnRecvCallback callback = mAppRecvCallback;
 
@@ -596,7 +614,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
                     // Even if app recv callbacks have stopped, continue unwrapping
                     // opportunistically until we can unwrap no further.  Any subsequent execution
                     // of this code path will exit appropriately if mAppRecvCallback == null.
-                    mInAppBuffer.prepareAppend();
+                    mInAppBuffer.flipAppend();
 
                     // An AsyncConnection assumes that content in the buffer is fully consumed by
                     // callbacks.
@@ -623,7 +641,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
                     break;
 
                 case UNWRAP_LOAD_SRC_BUFFER:
-                    mInNetBuffer.prepareAppend();
+                    mInNetBuffer.flipAppend();
 
                     /* A persistent receive is already configured.  Wait for it. */
                     return StepState.WAITING;
@@ -641,8 +659,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
         // network.  Such a situation indicates send completion, which triggers a callback.
         //
         // This should be checked before we wrap any further.
-
-        mOutNetBuffer.prepareRead();
         if (mAppSendCallback != null &&
                 mOutNetBuffer.isEmpty() &&
                 mOutAppReader.isEmpty()) {
@@ -656,17 +672,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
             return StepState.WAITING;
         }
 
-        if (mOutNetBuffer.isEmpty()) {
-            // We've flushed all wrapped data to the network (or have an empty buffer).  Prepare
-            // for new data.
-            mOutNetBuffer.clear();
-        }
-
         // We are handling wraps here.
         mAppRequestWrap = false;
 
         do {
-            mOutNetBuffer.prepareAppend();
 
             SSLState.OpResult result = mCurrState.stepWrap(mOutAppReader, mOutNetBuffer);
             switch (result) {
@@ -674,7 +683,12 @@ class SSLNonBlockingConnection implements AsyncConnection {
                     return StepState.WAITING;
 
                 case DRAIN_DEST_BUFFER:
-                    mOutNetBuffer.prepareRead();
+                    if (mOutNetBuffer.isEmpty()) {
+                        // We have nothing left to do.
+                        return StepState.WAITING;
+                    }
+
+                    mOutNetBuffer.flipRead();
 
                     mConn.send(mNetSendCallback);
                     return StepState.WAITING;
@@ -683,6 +697,12 @@ class SSLNonBlockingConnection implements AsyncConnection {
                     return StepState.CLOSE;
 
                 case SCHEDULE_TASKS:
+                    // Drain the buffer concurrently if necessary.
+                    if (!mOutNetBuffer.isEmpty()) {
+                        mOutNetBuffer.flipRead();
+                        mConn.send(mNetSendCallback);
+                    }
+
                     return StepState.TASKS;
 
                 case SCHEDULE_UNWRAP:
@@ -694,6 +714,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
                 case STATE_CHANGE:
                     swapState();
+
+                    // We don't have to worry about flushing any data at this point in time, because SSL
+                    // states will wrap as much as possible before flushing any residual data.
+                    //
+                    // It's safe to continue wrapping.
                     break;
 
                 case UNWRAP_LOAD_SRC_BUFFER:

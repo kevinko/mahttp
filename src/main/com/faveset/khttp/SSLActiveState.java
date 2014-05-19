@@ -39,7 +39,7 @@ class SSLActiveState extends SSLBaseState {
                 case BUFFER_OVERFLOW:
                     // dest is the (unwrapped) application buffer.
                     int newBufSize = mSSLEngine.getSession().getApplicationBufferSize();
-                    if (!resizeOverflowedBuffer(dest, newBufSize)) {
+                    if (!resizeAppendBuffer(dest, newBufSize)) {
                         // dest was not empty.  Drain it first.
                         return OpResult.DRAIN_DEST_BUFFER;
                     }
@@ -69,6 +69,11 @@ class SSLActiveState extends SSLBaseState {
         } while (true);
     }
 
+    /**
+     * As a general protocol, we return DRAIN_DEST_BUFFER whenever we can wrap no further.  This
+     * ensures that all wrapped data is flushed.  We assume that the caller will handle the case
+     * when dest is empty after wrapping.
+     */
     @Override
     public OpResult stepWrap(NetReader src, NetBuffer dest) throws SSLException {
         do {
@@ -77,7 +82,7 @@ class SSLActiveState extends SSLBaseState {
                 case BUFFER_OVERFLOW:
                     // dest is destined for the network, hence packet buffer.
                     int newBufSize = mSSLEngine.getSession().getPacketBufferSize();
-                    if (!resizeOverflowedBuffer(dest, newBufSize)) {
+                    if (!resizeAppendBuffer(dest, newBufSize)) {
                         // dest was not empty.
                         return OpResult.DRAIN_DEST_BUFFER;
                     }
@@ -89,6 +94,9 @@ class SSLActiveState extends SSLBaseState {
                     // We're out of src data to wrap, so we're done wrapping for now.  Since this
                     // is application data, trigger any recv callbacks as soon as possible, hence
                     // drain the dest buffer.
+                    //
+                    // NOTE: this does not seem to be triggered by wrap, but handle it sanely just
+                    // in case.
                     return OpResult.DRAIN_DEST_BUFFER;
 
                 case CLOSED:
@@ -97,7 +105,13 @@ class SSLActiveState extends SSLBaseState {
                 case OK:
                     src.updateRead();
 
-                    // Keep trying to wrap as much as possible.
+                    // See if we simply do not have any more data.
+                    if (src.isEmpty()) {
+                        // This also handles the case when the dest is empty.
+                        return OpResult.DRAIN_DEST_BUFFER;
+                    }
+
+                    // Else, keep trying to wrap as much as possible.
                     break;
             }
 

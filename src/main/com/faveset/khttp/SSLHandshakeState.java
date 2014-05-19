@@ -68,9 +68,13 @@ class SSLHandshakeState extends SSLBaseState {
             SSLEngineResult result = src.wrap(mSSLEngine, dest);
             switch (result.getStatus()) {
                 case BUFFER_OVERFLOW:
+                    // NOTE: This can also be triggered by the SSLEngine when it wants to flush
+                    // all outgoing handshake data (before FINISHED).  Curiously, this does not
+                    // happen when a NEED_UNWRAP occurs.
+
                     // dest is an outgoing network buffer; hence, use packet size.
                     int newBufSize = mSSLEngine.getSession().getPacketBufferSize();
-                    if (!resizeOverflowedBuffer(dest, newBufSize)) {
+                    if (!resizeAppendBuffer(dest, newBufSize)) {
                         // dest was not empty.
                         return OpResult.DRAIN_DEST_BUFFER;
                     }
@@ -101,6 +105,13 @@ class SSLHandshakeState extends SSLBaseState {
                     return OpResult.SCHEDULE_TASKS;
 
                 case NEED_UNWRAP:
+                    // Flush any wrapped data before waiting for a response.  This ensures progress.
+                    // Otherwise, it is possible for both the SSLEngine and the peer to be waiting.
+                    // In such a case, unwrapping will continue after send completion.
+                    if (!dest.isEmpty()) {
+                        return OpResult.DRAIN_DEST_BUFFER;
+                    }
+
                     return OpResult.SCHEDULE_UNWRAP;
 
                 case NEED_WRAP:
