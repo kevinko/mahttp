@@ -9,7 +9,7 @@ import javax.net.ssl.SSLException;
 
 interface NetReader {
     /**
-     * @return true if the NetReader does not contain any more data for reading.
+     * @return true if the NetReader does not contain any data when reading.
      */
     boolean isEmpty();
 
