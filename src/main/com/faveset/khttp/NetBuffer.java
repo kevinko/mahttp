@@ -163,7 +163,7 @@ class NetBuffer implements NetReader {
             return !(mBuf.hasRemaining());
         }
 
-        // Immitate a flipRead().
+        // Imitate a flipRead().
         int pos = mReadStartPos;
         int limit = mBuf.position();
         return (pos >= limit);
