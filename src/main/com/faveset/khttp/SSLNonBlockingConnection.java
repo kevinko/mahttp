@@ -284,6 +284,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void dispatchImpl(StepState initState) throws IOException {
+        // We use a two-phase commit when the WAITING state is reached to determine whether we are
+        // really done.  doneUnwrapOrWrap is true after an unwrap or wrap step returns nextState WAITING
+        // (i.e., unwrapping is done).  It signals that the first phase has been completed.
+        boolean doneUnwrapOrWrap = false;
+
         StepState state = initState;
         do {
             StepState nextState = step(state);
@@ -331,7 +336,18 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 } else if (mRequestUnwrap) {
                     nextState = StepState.UNWRAP;
                 } else {
-                    break;
+                    if (!doneUnwrapOrWrap && state == StepState.WRAP) {
+                        // Wrapping is done.
+                        doneUnwrapOrWrap = true;
+                        nextState = StepState.UNWRAP;
+                    } else if (!doneUnwrapOrWrap && state == StepState.UNWRAP) {
+                        // Unwrapping is done.
+                        doneUnwrapOrWrap = true;
+                        nextState = StepState.WRAP;
+                    } else {
+                        // We've completely unwrapped and wrapped as much as possible.  We're done.
+                        break;
+                    }
                 }
             }
 
