@@ -180,18 +180,6 @@ class NetBuffer implements NetReader {
     }
 
     /**
-     * Sets the read position of the buffer to the last unread position based on the last call to
-     * updateRead().  This only takes effect if the NetBuffer is in read mode.
-     */
-    public void rewindRead() {
-        if (mState != State.READ) {
-            return;
-        }
-
-        mBuf.position(mReadStartPos);
-    }
-
-    /**
      * Safe resize that preserves data:
      *
      * If reading, the data will be compacted from the current position.
@@ -247,6 +235,18 @@ class NetBuffer implements NetReader {
             // The newly resized buffer is empty.
             mBuf.limit(0);
         }
+    }
+
+    /**
+     * Sets the read position of the buffer to the last unread position based on the last call to
+     * updateRead().  This only takes effect if the NetBuffer is in read mode.
+     */
+    public void rewindRead() {
+        if (mState != State.READ) {
+            return;
+        }
+
+        mBuf.position(mReadStartPos);
     }
 
     /**
