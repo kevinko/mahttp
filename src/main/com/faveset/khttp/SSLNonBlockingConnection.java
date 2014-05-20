@@ -112,14 +112,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
     // true if the app requested persistent receive callbacks.
     private boolean mAppRecvIsPersistent;
 
-    // This is set when an application desires an unwrap via a recv method.  It is cleared
-    // by stepUnwrap().
-    private boolean mAppRequestUnwrap;
-
-    // This is set when an application desires a wrap via a send method.  It is cleared by
-    // stepWrap().
-    private boolean mAppRequestWrap;
-
     // true if the SSLNonBlockingConnection is awaiting an explicit recv call from the app layer
     // for unwrapping to continue.  The underlying NonBlockingConnection's receive will be inactive
     // when this is true.  It will be rescheduled by the recv method.
@@ -128,8 +120,12 @@ class SSLNonBlockingConnection implements AsyncConnection {
     // True if currently dispatching (i.e., in the dispatch() call).
     private boolean mIsDispatching;
 
-    // Set when the internal send callback handler (onNetSend()) requires a wrap.  This is set when the
-    // callback handler is called within a dispatch loop to avoid nesting of sends.
+    // This is set when an unwrap is desired (e.g., via a recv method).  It is cleared
+    // by stepUnwrap().
+    private boolean mRequestUnwrap;
+
+    // This is set when a wrap is desired (e.g., via a send method or when onNetSend() is called
+    // from within a dispatch loop).  It is cleared by stepWrap().
     private boolean mRequestWrap;
 
     private AsyncConnection.OnCloseCallback mNetCloseCallback =
@@ -330,9 +326,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
             if (nextState == StepState.WAITING) {
                 // Resolve any callbacks that might have occurred.  Callbacks set wrap and unwrap
                 // requests.  stepUnwrap and stepWrap clear these requests.
-                if (mAppRequestWrap || mRequestWrap) {
+                if (mRequestWrap) {
                     nextState = StepState.WRAP;
-                } else if (mAppRequestUnwrap) {
+                } else if (mRequestUnwrap) {
                     nextState = StepState.UNWRAP;
                 } else {
                     break;
@@ -440,7 +436,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
 
         // Receives are unwraps.
-        mAppRequestUnwrap = true;
+        mRequestUnwrap = true;
     }
 
     @Override
@@ -482,7 +478,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mOutAppReader = reader;
 
         // Sending is wrapping.
-        mAppRequestWrap = true;
+        mRequestWrap = true;
     }
 
     /**
@@ -604,7 +600,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
             // mInAppBuffer, it's necessary to clear the flag on each iteration; otherwise,
             // a nested recv call's unwrap request flag will not be turned off despite
             // being handled by the loop.
-            mAppRequestUnwrap = false;
+            mRequestUnwrap = false;
 
             SSLState.OpResult result = mCurrState.stepUnwrap(mInNetBuffer, mInAppBuffer);
             switch (result) {
@@ -699,7 +695,6 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
 
         // We are handling wraps here.
-        mAppRequestWrap = false;
         mRequestWrap = false;
 
         do {
