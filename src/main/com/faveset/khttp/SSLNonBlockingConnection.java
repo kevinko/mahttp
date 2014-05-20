@@ -125,6 +125,13 @@ class SSLNonBlockingConnection implements AsyncConnection {
     // when this is true.  It will be rescheduled by the recv method.
     private boolean mNeedsAppRecv;
 
+    // True if currently dispatching (i.e., in the dispatch() call).
+    private boolean mIsDispatching;
+
+    // Set when the internal send callback handler (onNetSend()) requires a wrap.  This is set when the
+    // callback handler is called within a dispatch loop to avoid nesting of sends.
+    private boolean mRequestWrap;
+
     private AsyncConnection.OnCloseCallback mNetCloseCallback =
         new AsyncConnection.OnCloseCallback() {
             @Override
@@ -268,8 +275,14 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
     private void dispatch(StepState initState) {
         try {
+            mIsDispatching = true;
+
             dispatchImpl(initState);
+
+            mIsDispatching = false;
         } catch (IOException e) {
+            mIsDispatching = false;
+
             onNetError(null, e.toString());
         }
     }
@@ -305,6 +318,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
                     mConn.cancelRecv();
                     break;
                 }
+                // We don't worry about mRequestWrap, since the mTasksDoneCallback will resume
+                // dispatching when ready.
 
                 // Otherwise, no handshake tasks are scheduled.  This can happen if a task
                 // is already outstanding and an asynchronous send callback arrives, since we
@@ -315,7 +330,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
             if (nextState == StepState.WAITING) {
                 // Resolve any callbacks that might have occurred.  Callbacks set wrap and unwrap
                 // requests.  stepUnwrap and stepWrap clear these requests.
-                if (mAppRequestWrap) {
+                if (mAppRequestWrap || mRequestWrap) {
                     nextState = StepState.WRAP;
                 } else if (mAppRequestUnwrap) {
                     nextState = StepState.UNWRAP;
@@ -384,7 +399,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
         mOutNetBuffer.setAppend();
         mOutNetBuffer.clear();
 
-        dispatch(StepState.WRAP);
+        if (!mIsDispatching) {
+            dispatch(StepState.WRAP);
+        } else {
+            mRequestWrap = true;
+        }
     }
 
     /**
@@ -681,6 +700,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
         // We are handling wraps here.
         mAppRequestWrap = false;
+        mRequestWrap = false;
 
         do {
 
