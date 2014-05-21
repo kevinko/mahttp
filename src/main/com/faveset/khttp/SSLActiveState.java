@@ -50,6 +50,12 @@ class SSLActiveState extends SSLBaseState {
 
                 case BUFFER_UNDERFLOW:
                     // We need more data in the (src) network buffer to unwrap.
+                    if (!dest.isEmpty()) {
+                        // First, drain what we have to the app layer, since network ops will take
+                        // time.
+                        return OpResult.DRAIN_DEST_BUFFER;
+                    }
+
                     return OpResult.UNWRAP_LOAD_SRC_BUFFER;
 
                 case CLOSED:
@@ -64,6 +70,14 @@ class SSLActiveState extends SSLBaseState {
             }
 
             if (result.getHandshakeStatus() != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
+                if (!dest.isEmpty()) {
+                    // First, drain what we have to the app layer, since SSLHandshakeState currently
+                    // assumes that BUFFER_OVERFLOW (and thus DRAIN_DEST_BUFFER) cannot happen.
+                    //
+                    // TODO: you could update that assumption and eliminate this case.
+                    return OpResult.DRAIN_DEST_BUFFER;
+                }
+
                 return OpResult.STATE_CHANGE;
             }
         } while (true);
@@ -92,7 +106,7 @@ class SSLActiveState extends SSLBaseState {
 
                 case BUFFER_UNDERFLOW:
                     // We're out of src data to wrap, so we're done wrapping for now.  Since this
-                    // is application data, trigger any recv callbacks as soon as possible, hence
+                    // is application data, trigger any send callbacks as soon as possible, hence
                     // drain the dest buffer.
                     //
                     // NOTE: this does not seem to be triggered by wrap, but handle it sanely just
@@ -105,7 +119,8 @@ class SSLActiveState extends SSLBaseState {
                 case OK:
                     src.updateRead();
 
-                    // See if we simply do not have any more data.
+                    // See if we simply do not have any more data to unwrap, in which case we
+                    // should pass the unwrapped result to the application before continuing.
                     if (src.isEmpty()) {
                         // This also handles the case when the dest is empty.
                         return OpResult.DRAIN_DEST_BUFFER;
