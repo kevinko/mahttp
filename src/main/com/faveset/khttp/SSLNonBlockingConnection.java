@@ -727,6 +727,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
         // We do this after the mAppSendCallback section above to respect send ordering (data
         // comes before connection close).
+        //
+        // NOTE: there is a possibility that this could be reached while waiting for onNetRecv()
+        // data to unwrap.  It doesn't seem to be a problem, since we are closing and since the
+        // engine reports isOutBoundDone() == true.
         if (mConnState == ConnState.CLOSING && mSSLEngine.isOutboundDone()) {
             // We're finally done closing.
             return StepState.CLOSE;
