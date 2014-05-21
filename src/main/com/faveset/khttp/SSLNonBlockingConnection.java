@@ -228,8 +228,13 @@ class SSLNonBlockingConnection implements AsyncConnection {
         return result;
     }
 
+    /**
+     * The connection will be put into a CLOSING state and close handshaking will begin.
+     *
+     * @throws SSLException
+     */
     @Override
-    public void close() throws IOException {
+    public void close() throws SSLException {
         switch (mConnState) {
             case CLOSING:
             case CLOSED:
@@ -239,12 +244,17 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 break;
         }
 
-        mSSLEngine.closeInbound();
+        mConnState = ConnState.CLOSING;
+
+        // closeInbound() will be called after the SSLEngine has time to wrap close-related
+        // handshaking data that occurs as a result of closeOutbound().
         mSSLEngine.closeOutbound();
 
         // According to the documentation, only wrap needs to be called.  Thus, we do not worry
         // about the NEED_TASK status, which is not handled by startHandshake.
-        startHandshake();
+        if (!mIsDispatching) {
+            startHandshake();
+        }
     }
 
     /**
@@ -257,6 +267,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
         if (mConnState == ConnState.CLOSED) {
             return;
         }
+
+        // closeOutbound() is also called in close().  This will be vacuous in that case.
+        mSSLEngine.closeOutbound();
+
+        mSSLEngine.closeInbound();
 
         mConnState = ConnState.CLOSED;
 
@@ -710,6 +725,13 @@ class SSLNonBlockingConnection implements AsyncConnection {
             return StepState.WAITING;
         }
 
+        // We do this after the mAppSendCallback section above to respect send ordering (data
+        // comes before connection close).
+        if (mConnState == ConnState.CLOSING && mSSLEngine.isOutboundDone()) {
+            // We're finally done closing.
+            return StepState.CLOSE;
+        }
+
         // We are handling wraps here.
         mRequestWrap = false;
 
@@ -728,6 +750,8 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
                     mOutNetBuffer.flipRead();
 
+                    // NOTE: send may complete immediately, which could lead to a nested call to
+                    // dispatch.
                     mConn.send(mNetSendCallback);
                     return StepState.WAITING;
 
@@ -738,6 +762,9 @@ class SSLNonBlockingConnection implements AsyncConnection {
                     // Drain the buffer concurrently if necessary.
                     if (!mOutNetBuffer.isEmpty()) {
                         mOutNetBuffer.flipRead();
+
+                        // NOTE: send may complete immediately, which could lead to a nested call to
+                        // dispatch.
                         mConn.send(mNetSendCallback);
                     }
 

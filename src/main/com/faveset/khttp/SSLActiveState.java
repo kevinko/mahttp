@@ -59,6 +59,13 @@ class SSLActiveState extends SSLBaseState {
                     return OpResult.UNWRAP_LOAD_SRC_BUFFER;
 
                 case CLOSED:
+                    // Let the handshaking state deal with closure if requested, since the SSLEngine
+                    // generates handshaking messages on graceful closure.  Otherwise, fall-back
+                    // to a direct close.
+                    if (result.getHandshakeStatus() !=
+                            SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
+                        break;
+                    }
                     return OpResult.ENGINE_CLOSE;
 
                 case OK:
@@ -114,6 +121,12 @@ class SSLActiveState extends SSLBaseState {
                     return OpResult.DRAIN_DEST_BUFFER;
 
                 case CLOSED:
+                    // Let the handshaking state deal with closure if requested.  Otherwise,
+                    // fall-back to a direct close.
+                    if (result.getHandshakeStatus() !=
+                            SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
+                        break;
+                    }
                     return OpResult.ENGINE_CLOSE;
 
                 case OK:
