@@ -20,7 +20,7 @@ class SSLHandshakeState extends SSLBaseState {
     }
 
     @Override
-    public OpResult stepUnwrap(NetReader src, NetBuffer dest) throws SSLException {
+    public OpResult stepUnwrap(NetBuffer src, NetBuffer dest) throws SSLException {
         do {
             SSLEngineResult result = src.unwrap(mSSLEngine, dest);
             switch (result.getStatus()) {
@@ -31,7 +31,19 @@ class SSLHandshakeState extends SSLBaseState {
                     break;
 
                 case BUFFER_UNDERFLOW:
-                    // We need more data from the network.
+                    // Try to append as much as possible to the source buffer before resizing and
+                    // compacting.
+                    if (src.isFull()) {
+                        // Try compacting first to make room.
+                        int netBufSize = mSSLEngine.getSession().getPacketBufferSize();
+                        if (!resizeOrCompactSourceBuffer(src, netBufSize)) {
+                            // src is already appropriately sized and compacted.
+                            throw new RuntimeException(
+                                    "buffer is correctly sized and compacted.  This should not happen.");
+                        }
+                        // Otherwise, we've resized and can load more data.
+                    }
+
                     return OpResult.UNWRAP_LOAD_SRC_BUFFER;
 
                 case CLOSED:

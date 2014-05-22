@@ -45,7 +45,36 @@ abstract class SSLBaseState implements SSLState {
         return true;
     }
 
-    public abstract OpResult stepUnwrap(NetReader src, NetBuffer dest) throws SSLException;
+    /**
+     * Resizes or compacts the given source NetBuffer that is normally loaded with data to be
+     * unwrapped.
+     *
+     * @param buf
+     * @param newBufSize the buffer size required by the SSLEngine.
+     *
+     * @return true if buf was resized or compacted as a result of this method.  In this case, the caller
+     * should try loading more data into the buffer.  Otherwise, returns false if the buf is
+     * already resized and compacted.  In that case, the caller should typically try loading more data into
+     * the buffer; a check should also be performed to see if the buffer is already full, which is a runtime
+     * error that should never happen.
+     */
+    protected boolean resizeOrCompactSourceBuffer(NetBuffer buf, int newBufSize) {
+        if (buf.needsResize(newBufSize)) {
+            // The resize operation also compacts data.
+            buf.resize(mFactory, newBufSize);
+            return true;
+        }
+
+        // Otherwise, compact the buffer.
+        if (buf.isCompacted()) {
+            return false;
+        }
+
+        buf.compact();
+        return true;
+    }
+
+    public abstract OpResult stepUnwrap(NetBuffer src, NetBuffer dest) throws SSLException;
 
     public abstract OpResult stepWrap(NetReader src, NetBuffer dest) throws SSLException;
 }

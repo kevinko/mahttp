@@ -18,11 +18,11 @@ interface SSLState {
     }
 
     /**
-     * Unwraps from src to dest.
+     * Unwraps from src to dest.  src is a network buffer, which may be resized.
      *
      * @throws SSLException
      */
-    OpResult stepUnwrap(NetReader src, NetBuffer dest) throws SSLException;
+    OpResult stepUnwrap(NetBuffer src, NetBuffer dest) throws SSLException;
 
     /**
      * Wraps from src to dest.
