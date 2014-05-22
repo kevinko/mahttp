@@ -50,6 +50,7 @@ public class NetBufferTest {
         }
 
         netBuf.flipAppend();
+        assertTrue(!netBuf.isCompacted());
         assertEquals(3, buf.position());
 
         // Test preservation when resizing.  This should compact the underlying buffer.
@@ -57,6 +58,7 @@ public class NetBufferTest {
         netBuf.resize(factory, 2048);
         buf = netBuf.getByteBuffer();
 
+        assertTrue(netBuf.isCompacted());
         assertEquals(2048, buf.capacity());
         // The underlying buffer has been compacted.
         assertEquals(2, buf.position());
@@ -103,5 +105,48 @@ public class NetBufferTest {
         assertTrue(!netBuf.isEmpty());
         netBuf.clear();
         assertTrue(netBuf.isEmpty());
+    }
+
+    @Test
+    public void testCompaction() {
+        ByteBuffer buf = ByteBuffer.allocate(4);
+        NetBuffer netBuf = NetBuffer.makeAppendBuffer(buf);
+        assertTrue(!netBuf.isFull());
+
+        buf.put((byte) 0);
+        assertTrue(!netBuf.isFull());
+        buf.put((byte) 0);
+        assertTrue(!netBuf.isFull());
+        buf.put((byte) 0);
+        assertTrue(!netBuf.isFull());
+        buf.put((byte) 0);
+        assertTrue(netBuf.isFull());
+
+        // Read the first element to offset the buffer.
+        netBuf.flipRead();
+        try {
+            assertTrue(!netBuf.isEmpty());
+            assertEquals(0, buf.get());
+        } finally {
+            netBuf.updateRead();
+        }
+        // The buffer is still full, since it is not compacted.
+        assertTrue(netBuf.isFull());
+
+        netBuf.flipAppend();
+
+        assertTrue(netBuf.isFull());
+        assertTrue(!netBuf.isCompacted());
+
+        assertEquals(4, buf.position());
+
+        // Now, compact.
+        netBuf.compact();
+
+        assertTrue(netBuf.isCompacted());
+        // Compaction frees a space.
+        assertTrue(!netBuf.isFull());
+
+        assertEquals(3, buf.position());
     }
 }

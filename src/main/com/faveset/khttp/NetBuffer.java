@@ -74,6 +74,28 @@ class NetBuffer implements NetReader {
     }
 
     /**
+     * Compacts the contents of the buffer so that they all start at the front of the buffer.
+     */
+    public void compact() {
+        if (mState == State.APPEND) {
+            // Effect a flipRead().
+            mBuf.flip();
+            mBuf.position(mReadStartPos);
+        }
+
+        mBuf.compact();
+        // ByteBuffer compact leaves mBuf positioned for appending.
+
+        mReadStartPos = 0;
+
+        if (mState == State.READ) {
+            // Reposition for reading.
+            mBuf.flip();
+            mBuf.position(mReadStartPos);
+        }
+    }
+
+    /**
      * Prepares the buffer for a network channel append.  The buffer will
      * be flipped so that its position will be the limit and the new limit
      * will be its capacity.
@@ -131,6 +153,22 @@ class NetBuffer implements NetReader {
     }
 
     /**
+     * @return true if the buffer's contents are all at the start of the buffer.
+     */
+    public boolean isCompacted() {
+        // We only worry about the initial read position.  limit is meaningless in this context,
+        // since flipAppend() will always set the limit to capacity.
+        int pos = mBuf.position();
+
+        if (mState == State.APPEND) {
+            // Imitate a flipRead().
+            pos = mReadStartPos;
+        }
+
+        return (pos == 0);
+    }
+
+    /**
      * A cleared append buffer has position 0 and limit == capacity.  Note that being cleared is a
      * superset of being empty.  A cleared buffer is both empty and has a limit at full capacity
      * when appending, which is equivalent to the state after a ByteBuffer.clear().
@@ -167,6 +205,21 @@ class NetBuffer implements NetReader {
         int pos = mReadStartPos;
         int limit = mBuf.position();
         return (pos >= limit);
+    }
+
+    /**
+     * @return true if the buffer is full with respect to future appends
+     */
+    public boolean isFull() {
+        int pos = mBuf.position();
+        int limit = mBuf.limit();
+
+        if (mState == State.READ) {
+            // Imitate flipAppend().
+            pos = mBuf.limit();
+            limit = mBuf.capacity();
+        }
+        return (pos == limit);
     }
 
     /**
