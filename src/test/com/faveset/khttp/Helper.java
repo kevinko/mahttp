@@ -172,6 +172,15 @@ class Helper {
         return ByteBuffer.wrap(s.getBytes(US_ASCII_CHARSET));
     }
 
+    public static String makeTestString(int size) {
+        StringBuilder builder = new StringBuilder();
+        for (int ii = 0; ii < size; ii++) {
+            char ch = (char) ((byte) 'a' + (ii % 26));
+            builder.append(ch);
+        }
+        return builder.toString();
+    }
+
     /**
      * Reads until a '\n', and returns the line as a string, with '\n'
      * included.

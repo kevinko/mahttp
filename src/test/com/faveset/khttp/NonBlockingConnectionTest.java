@@ -8,9 +8,7 @@ import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -40,7 +38,7 @@ public class NonBlockingConnectionTest {
     @Test
     public void testRecvAppend() throws IOException, InterruptedException {
         // Pick something that fits within a single buffer.
-        final String expectedStr = makeTestString(128);
+        final String expectedStr = Helper.makeTestString(128);
         // Pick a smaller buffer that differs in size from the internal buffer.
         final ByteBuffer extBuf = ByteBuffer.allocate(17);
         // Test that onRecv does not clear the buf parameter.
@@ -78,7 +76,7 @@ public class NonBlockingConnectionTest {
     @Test
     public void testRecvAppendPersistent() throws IOException, InterruptedException {
         // Pick something that fits within a single buffer.
-        final String expectedStr = makeTestString(128);
+        final String expectedStr = Helper.makeTestString(128);
         // Pick a smaller buffer that differs in size from the internal buffer.
         final ByteBuffer extBuf = ByteBuffer.allocate(17);
         // Test that onRecv does not clear the buf parameter.
@@ -146,7 +144,7 @@ public class NonBlockingConnectionTest {
     @Test
     public void testRecvSimple() throws IOException, InterruptedException {
         // Pick something that fits within a single buffer.
-        final String expectedStr = makeTestString(128);
+        final String expectedStr = Helper.makeTestString(128);
 
         Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
             @Override
@@ -177,7 +175,7 @@ public class NonBlockingConnectionTest {
     @Test
     public void testRecvLong() throws IOException, InterruptedException {
         // Pick something that exceeds a single buffer.
-        final String expectedStr = makeTestString(4096);
+        final String expectedStr = Helper.makeTestString(4096);
 
         Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
             private int mRecvCount = 0;
@@ -316,7 +314,7 @@ public class NonBlockingConnectionTest {
     @Test
     public void testRecvPersistent() throws IOException, InterruptedException {
         // Pick something that exceeds the NonBlockingConnection buffer.
-        final String expectedStr = makeTestString(4096);
+        final String expectedStr = Helper.makeTestString(4096);
 
         Tester tester = new Tester(makeSendTask(expectedStr), 16) {
             private int mRecvCount = 0;
@@ -383,18 +381,9 @@ public class NonBlockingConnectionTest {
         };
     }
 
-    private String makeTestString(int size) {
-        StringBuilder builder = new StringBuilder();
-        for (int ii = 0; ii < size; ii++) {
-            char ch = (char) ((byte) 'a' + (ii % 26));
-            builder.append(ch);
-        }
-        return builder.toString();
-    }
-
     @Test
     public void testSend() throws IOException, InterruptedException {
-        final String expectedString = makeTestString(128);
+        final String expectedString = Helper.makeTestString(128);
 
         Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
             @Override
@@ -425,7 +414,7 @@ public class NonBlockingConnectionTest {
 
     @Test
     public void testSendBuffer() throws IOException, InterruptedException {
-        final String expectedString = makeTestString(128);
+        final String expectedString = Helper.makeTestString(128);
 
         Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
             @Override
@@ -452,7 +441,7 @@ public class NonBlockingConnectionTest {
     @Test
     public void testSendBuffers() throws IOException, InterruptedException {
         // Pick an number that is not divisible by a buffer size.
-        final String expectedString = makeTestString(5001);
+        final String expectedString = Helper.makeTestString(5001);
         final ByteBufferArrayBuilder builder = new ByteBufferArrayBuilder(16, true);
         builder.writeString(expectedString);
 
@@ -489,7 +478,7 @@ public class NonBlockingConnectionTest {
     @Test
     public void testSendPartial() throws IOException, InterruptedException {
         int len = 1 << 20;
-        final String expectedString = makeTestString(len - 1);
+        final String expectedString = Helper.makeTestString(len - 1);
         final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
 
         Tester tester = new Tester(makeRecvTask(expectedString), len) {
@@ -533,7 +522,7 @@ public class NonBlockingConnectionTest {
     // completes.
     @Test
     public void testRecvClose() throws IOException, InterruptedException {
-        final String expectedString = makeTestString(65535);
+        final String expectedString = Helper.makeTestString(65535);
         final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
 
         Tester tester = new Tester(makeSendTask(expectedString), 65536) {
@@ -580,7 +569,7 @@ public class NonBlockingConnectionTest {
     public void testSendClose() throws IOException, InterruptedException {
         // Pick a large value that won't fit in a socket buffer.
         int bufLen = 1 << 20;
-        final String expectedString = makeTestString(bufLen - 1);
+        final String expectedString = Helper.makeTestString(bufLen - 1);
         final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
 
         Tester tester = new Tester(makeRecvCloseTask(expectedString, 1024), bufLen) {
@@ -652,7 +641,7 @@ public class NonBlockingConnectionTest {
     //     bitwise-disjoined into the key's current ready set.
     @Test
     public void testRecvSelectorSets() throws IOException, InterruptedException {
-        final String expectedString = makeTestString(65535);
+        final String expectedString = Helper.makeTestString(65535);
         final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
 
         Tester tester = new Tester(makeSendTask(expectedString), 65536) {
@@ -703,7 +692,7 @@ public class NonBlockingConnectionTest {
 
     @Test
     public void testSendSelectorSets() throws IOException, InterruptedException {
-        final String expectedString = makeTestString(65535);
+        final String expectedString = Helper.makeTestString(65535);
         final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
 
         Tester tester = new Tester(makeRecvSinkTask(), 65536) {
