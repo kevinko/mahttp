@@ -35,6 +35,8 @@ public class HttpServer {
     // with the Selector.
     private Selector mSelector;
 
+    private SelectTaskQueue mSelectTaskQueue;
+
     private SelectorHandler mListenSelectorHandler = new SelectorHandler() {
             @Override
             public void onReady(SelectionKey key) {
@@ -149,6 +151,8 @@ public class HttpServer {
         sock.bind(sa);
 
         mSelector = Selector.open();
+        mSelectTaskQueue = new SelectTaskQueue(mSelector);
+
         mListenKey = mListenChan.register(mSelector, SelectionKey.OP_ACCEPT, mListenSelectorHandler);
 
         mIsDone = false;
@@ -169,6 +173,15 @@ public class HttpServer {
             if (mIsDone) {
                 break;
             }
+
+            // Handle any tasks that must run in the selector thread.
+            do {
+                Runnable task = mSelectTaskQueue.poll();
+                if (task == null) {
+                    break;
+                }
+                task.run();
+            } while (true);
 
             Iterator<SelectionKey> iter = mSelector.selectedKeys().iterator();
             while (iter.hasNext()) {
