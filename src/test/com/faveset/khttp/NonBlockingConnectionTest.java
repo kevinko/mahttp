@@ -35,6 +35,101 @@ public class NonBlockingConnectionTest {
         }
     }
 
+    public static abstract class RecvLongTester extends Helper.AsyncConnectionTester {
+        private int mRecvCount = 0;
+
+        private String mExpectedStr;
+
+        private ByteBuffer mCmpBuf;
+
+        public RecvLongTester(Helper.ServerThread.Task serverTask, int bufferSize, String expectedStr) {
+            super(sListenPort, serverTask, bufferSize);
+
+            mExpectedStr = expectedStr;
+            mCmpBuf = ByteBuffer.allocate(2 * expectedStr.length());
+        }
+
+        private AsyncConnection.OnRecvCallback makeRecvCallback() {
+            return new AsyncConnection.OnRecvCallback() {
+                public void onRecv(AsyncConnection conn, ByteBuffer buf) {
+                    handleRecv(conn, buf);
+                }
+            };
+        }
+
+        @Override
+        protected void finish() {
+            super.finish();
+
+            assertTrue(mRecvCount > 1);
+        }
+
+        private void handleRecv(AsyncConnection conn, ByteBuffer buf) {
+            mRecvCount++;
+
+            try {
+                mCmpBuf.put(buf);
+
+                if (mCmpBuf.position() < mExpectedStr.length()) {
+                    // Continue feeding.
+                    conn.recv(makeRecvCallback());
+                    return;
+                }
+
+                mCmpBuf.flip();
+                Helper.compare(mCmpBuf, mExpectedStr);
+
+                conn.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        protected void prepareConn(AsyncConnection conn) {
+            conn.recv(makeRecvCallback());
+        }
+    }
+
+    public static abstract class RecvSimpleTester extends Helper.AsyncConnectionTester {
+        private String mExpectedStr;
+
+        private int mRecvCount = 0;
+
+        public RecvSimpleTester(Helper.ServerThread.Task serverTask, int bufferSize, String expectedStr) {
+            super(sListenPort, serverTask, bufferSize);
+
+            mExpectedStr = expectedStr;
+        }
+
+        @Override
+        protected void finish() {
+            super.finish();
+            assertEquals(1, mRecvCount);
+        }
+
+        @Override
+        protected void prepareConn(AsyncConnection conn) {
+            conn.recv(new AsyncConnection.OnRecvCallback() {
+                public void onRecv(AsyncConnection conn, ByteBuffer buf) {
+                    mRecvCount++;
+
+                    try {
+                        ByteBuffer cmpBuf = ByteBuffer.allocate(1024);
+
+                        cmpBuf.put(buf);
+                        cmpBuf.flip();
+                        Helper.compare(cmpBuf, mExpectedStr);
+
+                        conn.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            });
+        }
+    }
+
     @Test
     public void testRecvAppend() throws IOException, InterruptedException {
         // Pick something that fits within a single buffer.
@@ -146,26 +241,11 @@ public class NonBlockingConnectionTest {
         // Pick something that fits within a single buffer.
         final String expectedStr = Helper.makeTestString(128);
 
-        Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
+        RecvSimpleTester tester = new RecvSimpleTester(makeSendTask(expectedStr), 1024, expectedStr) {
             @Override
-            protected void prepareConn(AsyncConnection connArg) {
-                NonBlockingConnection conn = (NonBlockingConnection) connArg;
-
-                conn.recv(new AsyncConnection.OnRecvCallback() {
-                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
-                        try {
-                            ByteBuffer cmpBuf = ByteBuffer.allocate(1024);
-
-                            cmpBuf.put(buf);
-                            cmpBuf.flip();
-                            Helper.compare(cmpBuf, expectedStr);
-
-                            conn.close();
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                });
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                return new NonBlockingConnection(selector, chan, bufferSize);
             }
         };
 
@@ -177,51 +257,11 @@ public class NonBlockingConnectionTest {
         // Pick something that exceeds a single buffer.
         final String expectedStr = Helper.makeTestString(4096);
 
-        Tester tester = new Tester(makeSendTask(expectedStr), 1024) {
-            private int mRecvCount = 0;
-            private ByteBuffer mCmpBuf = ByteBuffer.allocate(2 * expectedStr.length());
-
-            private AsyncConnection.OnRecvCallback makeRecvCallback() {
-                return new AsyncConnection.OnRecvCallback() {
-                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
-                        handleRecv(conn, buf);
-                    }
-                };
-            }
-
+        RecvLongTester tester = new RecvLongTester(makeSendTask(expectedStr), 1024, expectedStr) {
             @Override
-            protected void finish() {
-                super.finish();
-
-                assertTrue(mRecvCount > 1);
-            }
-
-            private void handleRecv(AsyncConnection conn, ByteBuffer buf) {
-                mRecvCount++;
-
-                try {
-                    mCmpBuf.put(buf);
-
-                    if (mCmpBuf.position() < expectedStr.length()) {
-                        // Continue feeding.
-                        conn.recv(makeRecvCallback());
-                        return;
-                    }
-
-                    mCmpBuf.flip();
-                    Helper.compare(mCmpBuf, expectedStr);
-
-                    conn.close();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            @Override
-            protected void prepareConn(AsyncConnection connArg) {
-                NonBlockingConnection conn = (NonBlockingConnection) connArg;
-
-                conn.recv(makeRecvCallback());
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                return new NonBlockingConnection(selector, chan, bufferSize);
             }
         };
 

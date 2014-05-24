@@ -90,99 +90,55 @@ public class SSLNonBlockingConnectionTest {
     @Test
     public void testRecvSimple() throws IOException, CertificateException, InterruptedException,
            KeyManagementException, KeyStoreException, UnrecoverableKeyException {
-        SSLContext ctx = makeContext();
+        final SSLContext ctx = makeContext();
         SSLSocketFactory factory = ctx.getSocketFactory();
 
         // Pick something that fits within a single buffer.
         final String expectedStr = Helper.makeTestString(128);
 
-        Tester test = new Tester(ctx, makeSendTask(factory, expectedStr), 1024) {
-            private int mRecvCount = 0;
-
-            @Override
-            protected void finish() {
-                super.finish();
-                assertEquals(1, mRecvCount);
-            }
-
-            @Override
-            protected void prepareConn(AsyncConnection connArg) {
-                SSLNonBlockingConnection conn = (SSLNonBlockingConnection) connArg;
-                conn.getSSLEngine().setUseClientMode(false);
-
-                conn.recv(new AsyncConnection.OnRecvCallback() {
-                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
-                        mRecvCount++;
-
-                        try {
-                            ByteBuffer cmpBuf = ByteBuffer.allocate(1024);
-
-                            cmpBuf.put(buf);
-                            cmpBuf.flip();
-                            Helper.compare(cmpBuf, expectedStr);
-
-                            conn.close();
-                        } catch (SSLException e) {
-                            System.out.println(e);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
+        NonBlockingConnectionTest.RecvSimpleTester test =
+            new NonBlockingConnectionTest.RecvSimpleTester(makeSendTask(factory, expectedStr), 1024, expectedStr) {
+                @Override
+                protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                        SelectTaskQueue taskQueue) throws IOException {
+                    try {
+                        return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
+                    } catch (NoSuchAlgorithmException e) {
+                        throw new RuntimeException(e);
                     }
-                });
+                }
 
-                conn.start();
-            }
+                @Override
+                protected void prepareConn(AsyncConnection connArg) {
+                    SSLNonBlockingConnection conn = (SSLNonBlockingConnection) connArg;
+                    conn.getSSLEngine().setUseClientMode(false);
+
+                    super.prepareConn(connArg);
+
+                    conn.start();
+                }
         };
+
         test.run();
     }
 
     @Test
     public void testRecvLong() throws IOException, CertificateException, InterruptedException,
            KeyManagementException, KeyStoreException, UnrecoverableKeyException {
-        SSLContext ctx = makeContext();
+        final SSLContext ctx = makeContext();
         SSLSocketFactory factory = ctx.getSocketFactory();
 
         // Pick something that exceeds a single buffer.  Note that SSL buffers are much
         // larger than usual (around 16KB).
         final String expectedStr = Helper.makeTestString(32768);
 
-        Tester tester = new Tester(ctx, makeSendTask(factory, expectedStr), 1024) {
-            private int mRecvCount = 0;
-            private ByteBuffer mCmpBuf = ByteBuffer.allocate(2 * expectedStr.length());
-
-            private AsyncConnection.OnRecvCallback makeRecvCallback() {
-                return new AsyncConnection.OnRecvCallback() {
-                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
-                        handleRecv(conn, buf);
-                    }
-                };
-            }
-
+        NonBlockingConnectionTest.RecvLongTester tester = new NonBlockingConnectionTest.RecvLongTester(makeSendTask(factory, expectedStr), 1024, expectedStr) {
             @Override
-            protected void finish() {
-                super.finish();
-
-                assertTrue(mRecvCount >= 2);
-            }
-
-            private void handleRecv(AsyncConnection conn, ByteBuffer buf) {
-                System.out.println("handleRecv()");
-                mRecvCount++;
-
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
                 try {
-                    mCmpBuf.put(buf);
-
-                    if (mCmpBuf.position() < expectedStr.length()) {
-                        // Continue feeding.
-                        conn.recv(makeRecvCallback());
-                        return;
-                    }
-
-                    mCmpBuf.flip();
-                    Helper.compare(mCmpBuf, expectedStr);
-
-                    conn.close();
-                } catch (IOException e) {
+                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
+                } catch (NoSuchAlgorithmException e) {
                     throw new RuntimeException(e);
                 }
             }
@@ -192,7 +148,7 @@ public class SSLNonBlockingConnectionTest {
                 SSLNonBlockingConnection conn = (SSLNonBlockingConnection) connArg;
                 conn.getSSLEngine().setUseClientMode(false);
 
-                conn.recv(makeRecvCallback());
+                super.prepareConn(connArg);
 
                 conn.start();
             }
