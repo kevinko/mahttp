@@ -58,7 +58,8 @@ public interface AsyncConnection {
     void close() throws IOException;
 
     /**
-     * @return the internal send buffer.
+     * @return the internal send buffer.  One should take care to clear it before use to put it in a
+     * known state.
      */
     ByteBuffer getOutBuffer();
 
