@@ -20,6 +20,8 @@ public class OutputStreamLog implements Log {
 
     /**
      * Closes the stream and releases all resources.
+     *
+     * One should typically call this when finished logging to flush all output to the stream.
      */
     public void close() {
         mWriter.close();
