@@ -3,12 +3,14 @@
 package com.faveset.khttp;
 
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.Charset;
 import java.security.cert.CertificateException;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
@@ -26,8 +28,13 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import com.faveset.log.Log;
+import com.faveset.log.OutputStreamLog;
+
 @RunWith(JUnit4.class)
 public class SSLNonBlockingConnectionTest {
+    private static final Charset sUsAsciiCharset = Charset.forName("US-ASCII");
+
     private static final String sHostName = "localhost";
     private static final int sListenPort = 4889;
 
@@ -53,6 +60,37 @@ public class SSLNonBlockingConnectionTest {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    private Helper.ServerThread.Task makeRecvTask(final SSLSocketFactory factory, final String expectedStr) {
+        return new Helper.ServerThread.Task() {
+            public void run(Socket sockArg) {
+                try {
+                    SSLSocket sock = (SSLSocket) factory.createSocket(sockArg, sHostName, sListenPort, true);
+                    sock.setUseClientMode(true);
+
+                    sock.startHandshake();
+
+                    InputStream is = sock.getInputStream();
+                    byte[] data = new byte[expectedStr.length()];
+
+                    int count = 0;
+                    while (count < expectedStr.length()) {
+                        int remLen = expectedStr.length() - count;
+                        int len = is.read(data, count, remLen);
+                        count += len;
+                    }
+
+                    String s = new String(data, sUsAsciiCharset);
+                    assertEquals(expectedStr, s);
+
+                    // Read one more byte, which should be connection close.
+                    assertEquals(-1, is.read(data));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        };
     }
 
     private Helper.ServerThread.Task makeSendTask(final SSLSocketFactory factory, final String testStr) {
@@ -155,5 +193,43 @@ public class SSLNonBlockingConnectionTest {
         };
 
         tester.run();
+    }
+
+    @Test
+    public void testSend() throws IOException, CertificateException, InterruptedException,
+           KeyManagementException, KeyStoreException, UnrecoverableKeyException {
+        final OutputStreamLog log = new OutputStreamLog(System.out);
+
+        final SSLContext ctx = makeContext();
+        SSLSocketFactory factory = ctx.getSocketFactory();
+
+        final String expectedStr = Helper.makeTestString(128);
+
+        NonBlockingConnectionTest.SendTester tester = new NonBlockingConnectionTest.SendTester(makeRecvTask(factory, expectedStr), 1024, expectedStr) {
+            @Override
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                try {
+                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
+                } catch (NoSuchAlgorithmException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            protected void prepareConn(AsyncConnection connArg) {
+                SSLNonBlockingConnection conn = (SSLNonBlockingConnection) connArg;
+                conn.setLog(log);
+                conn.getSSLEngine().setUseClientMode(false);
+
+                super.prepareConn(connArg);
+
+                conn.start();
+            }
+        };
+
+        tester.run();
+
+        log.close();
     }
 }
