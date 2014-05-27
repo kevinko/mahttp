@@ -69,6 +69,12 @@ class SSLActiveState extends SSLBaseState {
                         return OpResult.DRAIN_DEST_BUFFER;
                     }
 
+                    if (result.getHandshakeStatus() !=
+                            SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
+                        // We might now be handshaking, so react accordingly.
+                        break;
+                    }
+
                     return OpResult.UNWRAP_LOAD_SRC_BUFFER;
 
                 case CLOSED:

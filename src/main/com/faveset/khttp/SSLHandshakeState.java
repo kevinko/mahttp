@@ -19,10 +19,36 @@ class SSLHandshakeState extends SSLBaseState {
         mSSLEngine = engine;
     }
 
+    /**
+     * @param status
+     *
+     * @return NONE if no primary operation occurs because of status
+     */
+    private OpResult handleUnwrapHandshakeStatus(SSLEngineResult.HandshakeStatus status) {
+        switch (status) {
+            case NEED_TASK:
+                return OpResult.SCHEDULE_TASKS;
+
+            case NEED_UNWRAP:
+                break;
+
+            case NEED_WRAP:
+                return OpResult.SCHEDULE_WRAP;
+
+            case FINISHED:
+            case NOT_HANDSHAKING:
+                return OpResult.STATE_CHANGE;
+        }
+
+        return OpResult.NONE;
+    }
+
     @Override
     public OpResult stepUnwrap(NetBuffer src, NetBuffer dest) throws SSLException {
         do {
             SSLEngineResult result = src.unwrap(mSSLEngine, dest);
+            SSLEngineResult.HandshakeStatus handshakeStatus = result.getHandshakeStatus();
+
             switch (result.getStatus()) {
                 case BUFFER_OVERFLOW:
                     // When handshaking, no application data is unwrapped.
@@ -44,6 +70,13 @@ class SSLHandshakeState extends SSLBaseState {
                         // Otherwise, we've resized and can load more data.
                     }
 
+                    OpResult handshakeResult = handleUnwrapHandshakeStatus(handshakeStatus);
+                    if (handshakeResult != OpResult.NONE) {
+                        // Give precedence to any handshake ops while waiting for the upcoming
+                        // network read.
+                        return handshakeResult;
+                    }
+
                     return OpResult.UNWRAP_LOAD_SRC_BUFFER;
 
                 case CLOSED:
@@ -56,20 +89,9 @@ class SSLHandshakeState extends SSLBaseState {
                     break;
             }
 
-            switch (result.getHandshakeStatus()) {
-                case NEED_TASK:
-                    return OpResult.SCHEDULE_TASKS;
-
-                case NEED_UNWRAP:
-                    // We're already unwrapping.
-                    break;
-
-                case NEED_WRAP:
-                    return OpResult.SCHEDULE_WRAP;
-
-                case FINISHED:
-                case NOT_HANDSHAKING:
-                    return OpResult.STATE_CHANGE;
+            OpResult handshakeResult = handleUnwrapHandshakeStatus(handshakeStatus);
+            if (handshakeResult != OpResult.NONE) {
+                return handshakeResult;
             }
         } while (true);
     }
@@ -101,6 +123,11 @@ class SSLHandshakeState extends SSLBaseState {
                     break;
 
                 case CLOSED:
+                    // Drain any residual handshaking data.
+                    if (!dest.isEmpty()) {
+                        return OpResult.DRAIN_DEST_BUFFER;
+                    }
+
                     return OpResult.ENGINE_CLOSE;
 
                 case OK:
