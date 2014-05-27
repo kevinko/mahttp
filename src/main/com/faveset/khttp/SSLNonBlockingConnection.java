@@ -15,6 +15,9 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLSession;
 
+import com.faveset.log.Log;
+import com.faveset.log.NullLog;
+
 /**
  * NOTE: Versions of Android before 3.0 have flawed support for SSLEngine.
  * This should only be used with Android 4.0+ targets.
@@ -48,6 +51,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
 
     // Virtually all browsers support TLSv1.
     private static final String sSSLProtocol = "TLS";
+
+    private static final String sTag = SSLNonBlockingConnection.class.toString();
+
+    private static Log sLog = new NullLog();
 
     // This should be scheduled after any executor tasks to signal completion
     // and restore events that were paused prior to execution.
@@ -262,16 +269,25 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * closure.  This should normally be called if the engine is in the SSLEngine
      * detects the closed state or if the NonBlockingConnection itself is closed,
      * which would prevent handshaking from proceeding.
+     *
+     * @throws IOException
      */
     private void closeImmediately() throws IOException {
+        System.out.println("closeImmediately() start");
         if (mConnState == ConnState.CLOSED) {
+            System.out.println("closeImmediately(): already closed");
             return;
         }
 
         // closeOutbound() is also called in close().  This will be vacuous in that case.
         mSSLEngine.closeOutbound();
 
-        mSSLEngine.closeInbound();
+        try {
+            mSSLEngine.closeInbound();
+        } catch (SSLException e) {
+            // Just log the close notify error if possible, but continue gracefully.
+            sLog.w(sTag, e.toString());
+        }
 
         mConnState = ConnState.CLOSED;
 
@@ -562,6 +578,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
         }
 
         return hasTask;
+    }
+
+    public static void setLog(Log log) {
+        sLog = log;
     }
 
     public void start() {
