@@ -35,6 +35,46 @@ public class NonBlockingConnectionTest {
         }
     }
 
+    public static abstract class RecvCloseTester extends Helper.AsyncConnectionTester {
+        private int mCloseCount = 0;
+
+        private String mExpectedStr;
+
+        public RecvCloseTester(Helper.ServerThread.Task serverTask, int bufferSize, String expectedStr) {
+            super(sListenPort, serverTask, bufferSize);
+
+            mExpectedStr = expectedStr;
+        }
+
+        @Override
+        protected void finish() {
+            super.finish();
+
+            assertEquals(1, mCloseCount);
+        }
+
+        @Override
+        protected void prepareConn(AsyncConnection conn) {
+            conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
+                public void onClose(AsyncConnection conn) {
+                    mCloseCount++;
+
+                    try {
+                        conn.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            });
+
+            conn.recvPersistent(new NonBlockingConnection.OnRecvCallback() {
+                public void onRecv(AsyncConnection conn, ByteBuffer buf) {
+                    // Just eat up the data.
+                }
+            });
+        }
+    }
+
     public static abstract class RecvLongTester extends Helper.AsyncConnectionTester {
         private int mRecvCount = 0;
 
@@ -680,40 +720,14 @@ public class NonBlockingConnectionTest {
     // completes.
     @Test
     public void testRecvClose() throws IOException, InterruptedException {
-        final String expectedString = Helper.makeTestString(65535);
-        final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
+        String expectedStr = Helper.makeTestString(65535);
 
-        Tester tester = new Tester(makeSendTask(expectedString), 65536) {
-            private int mCloseCount = 0;
-
+        RecvCloseTester tester = new RecvCloseTester(makeSendTask(expectedStr), 65536,
+                expectedStr) {
             @Override
-            protected void finish() {
-                super.finish();
-
-                assertEquals(1, mCloseCount);
-            }
-
-            @Override
-            protected void prepareConn(AsyncConnection connArg) {
-                NonBlockingConnection conn = (NonBlockingConnection) connArg;
-
-                conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
-                    public void onClose(AsyncConnection conn) {
-                        mCloseCount++;
-
-                        try {
-                            conn.close();
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                });
-
-                conn.recvPersistent(new NonBlockingConnection.OnRecvCallback() {
-                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
-                        // Just eat up the data.
-                    }
-                });
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                return new NonBlockingConnection(selector, chan, bufferSize);
             }
         };
 
