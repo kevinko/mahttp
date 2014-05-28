@@ -233,6 +233,46 @@ public class NonBlockingConnectionTest {
         }
     }
 
+    public static abstract class SendBuffersTester extends Helper.AsyncConnectionTester {
+        private String mExpectedStr;
+
+        private ByteBufferArrayBuilder mBuilder;
+
+        public SendBuffersTester(Helper.ServerThread.Task serverTask, int bufferSize,
+                String expectedStr) {
+            super(sListenPort, serverTask, bufferSize);
+
+            mExpectedStr = expectedStr;
+
+            mBuilder = new ByteBufferArrayBuilder(16, true);
+            mBuilder.writeString(expectedStr);
+        }
+
+        @Override
+        protected void finish() {
+            super.finish();
+
+            mBuilder.close();
+        }
+
+        @Override
+        protected void prepareConn(AsyncConnection conn) {
+            long remCount = mBuilder.remaining();
+
+            ByteBuffer[] bufs = mBuilder.build();
+
+            conn.send(new AsyncConnection.OnSendCallback() {
+                public void onSend(AsyncConnection conn) {
+                    try {
+                        conn.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }, bufs, remCount);
+        }
+    }
+
     @Test
     public void testRecvAppend() throws IOException, InterruptedException {
         // Pick something that fits within a single buffer.
@@ -520,34 +560,14 @@ public class NonBlockingConnectionTest {
     @Test
     public void testSendBuffers() throws IOException, InterruptedException {
         // Pick an number that is not divisible by a buffer size.
-        final String expectedString = Helper.makeTestString(5001);
-        final ByteBufferArrayBuilder builder = new ByteBufferArrayBuilder(16, true);
-        builder.writeString(expectedString);
+        String expectedStr = Helper.makeTestString(5001);
 
-        final long remCount = builder.remaining();
-        final ByteBuffer[] bufs = builder.build();
-
-        Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
+        SendBuffersTester tester = new SendBuffersTester(makeRecvTask(expectedStr), 1024,
+                expectedStr) {
             @Override
-            protected void finish() {
-                super.finish();
-
-                builder.close();
-            }
-
-            @Override
-            protected void prepareConn(AsyncConnection connArg) {
-                NonBlockingConnection conn = (NonBlockingConnection) connArg;
-
-                conn.send(new AsyncConnection.OnSendCallback() {
-                    public void onSend(AsyncConnection conn) {
-                        try {
-                            conn.close();
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                }, bufs, remCount);
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                return new NonBlockingConnection(selector, chan, bufferSize);
             }
         };
 
