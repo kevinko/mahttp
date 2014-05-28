@@ -207,6 +207,32 @@ public class NonBlockingConnectionTest {
         }
     }
 
+    public static abstract class SendBufferTester extends Helper.AsyncConnectionTester {
+        private String mExpectedStr;
+
+        public SendBufferTester(Helper.ServerThread.Task serverTask, int bufferSize,
+                String expectedStr) {
+            super(sListenPort, serverTask, bufferSize);
+
+            mExpectedStr = expectedStr;
+        }
+
+        @Override
+        protected void prepareConn(AsyncConnection conn) {
+            ByteBuffer src = Helper.makeByteBuffer(mExpectedStr);
+
+            conn.send(new AsyncConnection.OnSendCallback() {
+                public void onSend(AsyncConnection conn) {
+                    try {
+                        conn.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }, src);
+        }
+    }
+
     @Test
     public void testRecvAppend() throws IOException, InterruptedException {
         // Pick something that fits within a single buffer.
@@ -477,24 +503,14 @@ public class NonBlockingConnectionTest {
 
     @Test
     public void testSendBuffer() throws IOException, InterruptedException {
-        final String expectedString = Helper.makeTestString(128);
+        final String expectedStr = Helper.makeTestString(128);
 
-        Tester tester = new Tester(makeRecvTask(expectedString), 1024) {
+        SendBufferTester tester = new SendBufferTester(makeRecvTask(expectedStr), 1024,
+                expectedStr) {
             @Override
-            protected void prepareConn(AsyncConnection connArg) {
-                NonBlockingConnection conn = (NonBlockingConnection) connArg;
-
-                ByteBuffer src = Helper.makeByteBuffer(expectedString);
-
-                conn.send(new AsyncConnection.OnSendCallback() {
-                    public void onSend(AsyncConnection conn) {
-                        try {
-                            conn.close();
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                }, src);
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                return new NonBlockingConnection(selector, chan, bufferSize);
             }
         };
 

@@ -267,4 +267,43 @@ public class SSLNonBlockingConnectionTest {
 
         log.close();
     }
+
+    @Test
+    public void testSendBuffer() throws IOException, CertificateException, InterruptedException,
+           KeyManagementException, KeyStoreException, UnrecoverableKeyException {
+        final OutputStreamLog log = new OutputStreamLog(System.out);
+
+        final SSLContext ctx = makeContext();
+        SSLSocketFactory factory = ctx.getSocketFactory();
+
+        final String expectedStr = Helper.makeTestString(128);
+
+        NonBlockingConnectionTest.SendBufferTester tester = new NonBlockingConnectionTest.SendBufferTester(
+                makeRecvTask(factory, expectedStr), 1024, expectedStr) {
+            @Override
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                try {
+                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
+                } catch (NoSuchAlgorithmException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            protected void prepareConn(AsyncConnection connArg) {
+                SSLNonBlockingConnection conn = (SSLNonBlockingConnection) connArg;
+                conn.setLog(log);
+                conn.getSSLEngine().setUseClientMode(false);
+
+                super.prepareConn(connArg);
+
+                conn.start();
+            }
+        };
+
+        tester.run();
+
+        log.close();
+    }
 }
