@@ -126,6 +126,41 @@ public class SSLNonBlockingConnectionTest {
     }
 
     @Test
+    public void testRecvPersistent() throws IOException, CertificateException, InterruptedException,
+           KeyManagementException, KeyStoreException, UnrecoverableKeyException {
+        final SSLContext ctx = makeContext();
+        SSLSocketFactory factory = ctx.getSocketFactory();
+
+        // Pick something that exceeds the connection buffer.
+        final String expectedStr = Helper.makeTestString(65535);
+
+        NonBlockingConnectionTest.RecvPersistentTester test =
+            new NonBlockingConnectionTest.RecvPersistentTester(makeSendTask(factory, expectedStr), 16, expectedStr) {
+                @Override
+                protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                        SelectTaskQueue taskQueue) throws IOException {
+                    try {
+                        return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
+                    } catch (NoSuchAlgorithmException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                @Override
+                protected void prepareConn(AsyncConnection connArg) {
+                    SSLNonBlockingConnection conn = (SSLNonBlockingConnection) connArg;
+                    conn.getSSLEngine().setUseClientMode(false);
+
+                    super.prepareConn(connArg);
+
+                    conn.start();
+                }
+        };
+
+        test.run();
+    }
+
+    @Test
     public void testRecvSimple() throws IOException, CertificateException, InterruptedException,
            KeyManagementException, KeyStoreException, UnrecoverableKeyException {
         final SSLContext ctx = makeContext();

@@ -130,6 +130,52 @@ public class NonBlockingConnectionTest {
         }
     }
 
+    public static abstract class RecvPersistentTester extends Helper.AsyncConnectionTester {
+        private String mExpectedStr;
+
+        private int mRecvCount = 0;
+        private ByteBuffer mCmpBuf;
+
+        public RecvPersistentTester(Helper.ServerThread.Task serverTask, int bufferSize,
+                String expectedStr) {
+            super(sListenPort, serverTask, bufferSize);
+
+            mExpectedStr = expectedStr;
+            mCmpBuf = ByteBuffer.allocate(expectedStr.length());
+        }
+
+        @Override
+        protected void finish() {
+            super.finish();
+            assertTrue(mRecvCount > 1);
+        }
+
+        @Override
+        protected void prepareConn(AsyncConnection conn) {
+            conn.recvPersistent(new AsyncConnection.OnRecvCallback() {
+                public void onRecv(AsyncConnection conn, ByteBuffer buf) {
+                    mRecvCount++;
+
+                    try {
+                        mCmpBuf.put(buf);
+
+                        if (mCmpBuf.position() < mExpectedStr.length()) {
+                            // Continue feeding (persistent).
+                            return;
+                        }
+
+                        mCmpBuf.flip();
+                        Helper.compare(mCmpBuf, mExpectedStr);
+
+                        conn.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            });
+        }
+    }
+
     public static abstract class SendTester extends Helper.AsyncConnectionTester {
         private String mExpectedStr;
 
@@ -385,52 +431,14 @@ public class NonBlockingConnectionTest {
     @Test
     public void testRecvPersistent() throws IOException, InterruptedException {
         // Pick something that exceeds the NonBlockingConnection buffer.
-        final String expectedStr = Helper.makeTestString(4096);
+        final String expectedStr = Helper.makeTestString(65535);
 
-        Tester tester = new Tester(makeSendTask(expectedStr), 16) {
-            private int mRecvCount = 0;
-            private ByteBuffer mCmpBuf = ByteBuffer.allocate(2 * expectedStr.length());
-
-            private AsyncConnection.OnRecvCallback makeRecvCallback() {
-                return new AsyncConnection.OnRecvCallback() {
-                    public void onRecv(AsyncConnection conn, ByteBuffer buf) {
-                        handleRecv(conn, buf);
-                    }
-                };
-            }
-
+        RecvPersistentTester tester = new RecvPersistentTester(makeSendTask(expectedStr), 16,
+                expectedStr) {
             @Override
-            protected void finish() {
-                super.finish();
-
-                assertTrue(mRecvCount > 1);
-            }
-
-            private void handleRecv(AsyncConnection conn, ByteBuffer buf) {
-                mRecvCount++;
-
-                try {
-                    mCmpBuf.put(buf);
-
-                    if (mCmpBuf.position() < expectedStr.length()) {
-                        // Continue feeding (persistent).
-                        return;
-                    }
-
-                    mCmpBuf.flip();
-                    Helper.compare(mCmpBuf, expectedStr);
-
-                    conn.close();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            @Override
-            protected void prepareConn(AsyncConnection connArg) {
-                NonBlockingConnection conn = (NonBlockingConnection) connArg;
-
-                conn.recvPersistent(makeRecvCallback());
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                return new NonBlockingConnection(selector, chan, bufferSize);
             }
         };
 
