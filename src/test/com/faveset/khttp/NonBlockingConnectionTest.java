@@ -273,6 +273,65 @@ public class NonBlockingConnectionTest {
         }
     }
 
+    public static abstract class SendCloseTester extends Helper.AsyncConnectionTester {
+        private String mExpectedStr;
+
+        private int mCloseCount;
+        private int mErrorCount;
+
+        public SendCloseTester(Helper.ServerThread.Task serverTask, int bufferSize,
+                String expectedStr) {
+            super(sListenPort, serverTask, bufferSize);
+
+            mExpectedStr = expectedStr;
+        }
+
+        @Override
+        protected void finish() {
+            super.finish();
+
+            // NOTE: closes are just for receives, so send closes
+            // should not show up.
+            assertEquals(0, mCloseCount);
+            assertEquals(1, mErrorCount);
+        }
+
+        @Override
+        protected void prepareConn(AsyncConnection conn) {
+            conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
+                public void onClose(AsyncConnection conn) {
+                    mCloseCount++;
+
+                    try {
+                        conn.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            });
+
+            conn.setOnErrorCallback(new AsyncConnection.OnErrorCallback() {
+                public void onError(AsyncConnection conn, String reason) {
+                    mErrorCount++;
+
+                    try {
+                        conn.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            });
+
+            ByteBuffer buf = Helper.makeByteBuffer(mExpectedStr);
+
+            conn.send(new AsyncConnection.OnSendCallback() {
+                public void onSend(AsyncConnection conn) {
+                    assertTrue(false);
+                }
+            }, buf);
+        }
+    }
+
     @Test
     public void testRecvAppend() throws IOException, InterruptedException {
         // Pick something that fits within a single buffer.
@@ -668,60 +727,14 @@ public class NonBlockingConnectionTest {
     public void testSendClose() throws IOException, InterruptedException {
         // Pick a large value that won't fit in a socket buffer.
         int bufLen = 1 << 20;
-        final String expectedString = Helper.makeTestString(bufLen - 1);
-        final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
+        String expectedStr = Helper.makeTestString(bufLen - 1);
 
-        Tester tester = new Tester(makeRecvCloseTask(expectedString, 1024), bufLen) {
-            private int mCloseCount = 0;
-            private int mErrorCount = 0;
-
+        SendCloseTester tester = new SendCloseTester(makeRecvCloseTask(expectedStr, 1024),
+                expectedStr.length(), expectedStr) {
             @Override
-            protected void finish() {
-                super.finish();
-
-                // NOTE: closes are just for receives, so send closes
-                // should not show up.
-                assertEquals(0, mCloseCount);
-                assertEquals(1, mErrorCount);
-            }
-
-            @Override
-            protected void prepareConn(AsyncConnection connArg) {
-                NonBlockingConnection conn = (NonBlockingConnection) connArg;
-
-                conn.setOnCloseCallback(new AsyncConnection.OnCloseCallback() {
-                    public void onClose(AsyncConnection conn) {
-                        mCloseCount++;
-
-                        try {
-                            conn.close();
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                });
-
-                conn.setOnErrorCallback(new AsyncConnection.OnErrorCallback() {
-                    public void onError(AsyncConnection conn, String reason) {
-                        mErrorCount++;
-
-                        try {
-                            conn.close();
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                });
-
-                ByteBuffer outBuf = conn.getOutBuffer();
-                outBuf.put(buf);
-                outBuf.flip();
-
-                conn.send(new AsyncConnection.OnSendCallback() {
-                    public void onSend(AsyncConnection conn) {
-                        assertTrue(false);
-                    }
-                });
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                return new NonBlockingConnection(selector, chan, bufferSize);
             }
         };
 

@@ -62,6 +62,46 @@ public class SSLNonBlockingConnectionTest {
         }
     }
 
+    /**
+     * Closes the connection after closeBytes is received.
+     */
+    private Helper.ServerThread.Task makeRecvCloseTask(final SSLSocketFactory factory,
+            final String expectedStr, final int closeBytes) {
+        return new Helper.ServerThread.Task() {
+            public void run(Socket sockArg) {
+                int recvLen = closeBytes;
+                if (recvLen > expectedStr.length()) {
+                    recvLen = expectedStr.length();
+                }
+
+                try {
+                    SSLSocket sock = (SSLSocket) factory.createSocket(sockArg, sHostName, sListenPort, true);
+                    sock.setUseClientMode(true);
+
+                    sock.startHandshake();
+
+                    InputStream is = sock.getInputStream();
+                    byte[] data = new byte[recvLen];
+
+                    int count = 0;
+                    while (count < recvLen) {
+                        int remLen = recvLen - count;
+                        int len = is.read(data, count, remLen);
+                        count += len;
+                    }
+
+                    String s = new String(data, sUsAsciiCharset);
+                    assertEquals(expectedStr.substring(0, recvLen), s);
+
+                    // Now, force a connection close.
+                    sock.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        };
+    }
+
     private Helper.ServerThread.Task makeRecvTask(final SSLSocketFactory factory, final String expectedStr) {
         return new Helper.ServerThread.Task() {
             public void run(Socket sockArg) {
@@ -320,6 +360,48 @@ public class SSLNonBlockingConnectionTest {
         NonBlockingConnectionTest.SendBuffersTester tester =
             new NonBlockingConnectionTest.SendBuffersTester(makeRecvTask(factory, expectedStr),
                     1024, expectedStr) {
+            @Override
+            protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
+                    SelectTaskQueue taskQueue) throws IOException {
+                try {
+                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
+                } catch (NoSuchAlgorithmException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            protected void prepareConn(AsyncConnection connArg) {
+                SSLNonBlockingConnection conn = (SSLNonBlockingConnection) connArg;
+                conn.setLog(log);
+                conn.getSSLEngine().setUseClientMode(false);
+
+                super.prepareConn(connArg);
+
+                conn.start();
+            }
+        };
+
+        tester.run();
+
+        log.close();
+    }
+
+    @Test
+    public void testSendClose() throws IOException, CertificateException, InterruptedException,
+           KeyManagementException, KeyStoreException, UnrecoverableKeyException {
+        final OutputStreamLog log = new OutputStreamLog(System.out);
+
+        final SSLContext ctx = makeContext();
+        SSLSocketFactory factory = ctx.getSocketFactory();
+
+        // Pick a large value that won't fit in a socket buffer.
+        int bufLen = 1 << 20;
+        String expectedStr = Helper.makeTestString(bufLen - 1);
+
+        NonBlockingConnectionTest.SendCloseTester tester =
+            new NonBlockingConnectionTest.SendCloseTester(makeRecvCloseTask(factory, expectedStr, 1024),
+                    expectedStr.length(), expectedStr) {
             @Override
             protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                     SelectTaskQueue taskQueue) throws IOException {
