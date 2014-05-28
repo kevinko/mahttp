@@ -323,6 +323,11 @@ class SSLNonBlockingConnection implements AsyncConnection {
         StepState state = initState;
         do {
             StepState nextState = step(state);
+
+            if (mConnState == ConnState.CLOSED) {
+                break;
+            }
+
             if (nextState == state) {
                 // No change.  Stop cycles from occurring.
                 break;
@@ -418,6 +423,16 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void onNetError(AsyncConnection conn, String reason) {
+        // As with onNetClose, we cannot handshake on connection error, so just shut down.
+        try {
+            closeImmediately();
+        } catch (IOException e) {
+            if (mAppErrorCallback != null) {
+                mAppErrorCallback.onError(this, e.getMessage());
+                return;
+            }
+        }
+
         if (mAppErrorCallback != null) {
             mAppErrorCallback.onError(this, reason);
         }
