@@ -74,12 +74,6 @@ class HttpConnection {
 
     private static final String sTag = HttpConnection.class.toString();
 
-    // Creates direct ByteBuffers with size Constants.BYTE_BUFFER_BUFFER_SIZE.
-    // NOTE: this is not thread-safe.
-    private static ByteBufferPool sByteBufferPool =
-        new ByteBufferPool(Constants.BYTE_BUFFER_SIZE,
-                true, Constants.BYTE_BUFFER_POOL_SIZE);
-
     private static final EnumMap<State, StateEntry> mStateHandlerMap;
 
     // NOTE: this is not thread-safe.
@@ -137,16 +131,22 @@ class HttpConnection {
             }
         };
 
+    private HttpConnection(AsyncConnection conn) {
+        mConn = conn;
+
+        ByteBufferPool pool = ByteBufferPool.get();
+        mHandlerState = new HandlerState(pool).setOnRequestCallback(mRequestCallback);
+
+        mState = State.REQUEST_START;
+    }
+
     /**
      * The HttpConnection will manage registration of selector keys.
      * A SelectorHandler will be attached to selector keys for handling
      * by callers.
      */
     public HttpConnection(Selector selector, SocketChannel chan) throws IOException {
-        mConn = new NonBlockingConnection(selector, chan, sByteBufferPool);
-
-        mHandlerState = new HandlerState(sByteBufferPool).setOnRequestCallback(mRequestCallback);
-        mState = State.REQUEST_START;
+        this(new NonBlockingConnection(selector, chan, ByteBufferPool.get()));
     }
 
     /**
