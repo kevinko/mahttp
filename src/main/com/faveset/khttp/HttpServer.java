@@ -2,6 +2,7 @@
 
 package com.faveset.khttp;
 
+import java.io.InputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -10,12 +11,18 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
 
 import java.nio.channels.Selector;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+
+import javax.net.ssl.SSLContext;
 
 import com.faveset.log.Log;
 import com.faveset.log.NullLog;
@@ -57,7 +64,31 @@ public class HttpServer {
 
     private volatile boolean mIsDone;
 
+    private SSLContext mSSLContext;
+
     public HttpServer() {}
+
+    /**
+     * Configures the HttpServer to use SSL/TLS transport using the certificate from the given key
+     * and trust store.  password specifies the key used to encrypt the certificate.
+     *
+     * This must be called before listenAndServe().
+     *
+     * @param keyStoreStream
+     * @param trustStoreStream
+     * @param password
+     *
+     * @throws CertificateException
+     * @throws IOException
+     * @throws KeyManagementException
+     * @throws KeyStoreException
+     * @throws UnrecoverableKeyException if a key password is incorrect.
+     */
+    public void configureSSL(InputStream keyStoreStream, InputStream trustStoreStream,
+            String password) throws CertificateException, IOException, KeyManagementException,
+            KeyStoreException, UnrecoverableKeyException {
+        mSSLContext = SSLUtils.makeSSLContext(keyStoreStream, trustStoreStream, password);
+    }
 
     public void close() throws IOException {
         // This also cancels the key.
@@ -97,7 +128,12 @@ public class HttpServer {
 
         HttpConnection conn;
         try {
-            conn = new HttpConnection(mSelector, newChan);
+            if (mSSLContext != null) {
+                conn = HttpConnection.makeSecureConnection(mSelector, newChan, mSelectTaskQueue,
+                        mSSLContext);
+            } else {
+                conn = HttpConnection.makeConnection(mSelector, newChan);
+            }
         } catch (IOException e) {
             mLog.e(sTag, "could not create HttpConnection, closing", e);
 
