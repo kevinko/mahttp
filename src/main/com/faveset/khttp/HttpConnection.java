@@ -12,6 +12,8 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
 
+import javax.net.ssl.SSLContext;
+
 import com.faveset.log.Log;
 import com.faveset.log.NullLog;
 
@@ -130,6 +132,36 @@ class HttpConnection {
                 handleSendResponse();
             }
         };
+
+    /**
+     * @param selector
+     * @param chan
+     *
+     * @throws IOException
+     */
+    public static HttpConnection makeConnection(Selector selector, SocketChannel chan)
+            throws IOException {
+        return new HttpConnection(selector, chan);
+    }
+
+    /**
+     * This assumes that the secure HttpConnection is acting in a server role.
+     *
+     * @param selector
+     * @param chan
+     * @param taskQueue the task queue that executes tasks in the event loop.
+     * @param ctx
+     *
+     * @throws IOException
+     */
+    public static HttpConnection makeSecureConnection(Selector selector, SocketChannel chan,
+            SelectTaskQueue taskQueue, SSLContext ctx) throws IOException {
+        SSLNonBlockingConnection conn =
+            new SSLNonBlockingConnection(selector, chan, HeapByteBufferFactory.get(), taskQueue, ctx);
+        conn.getSSLEngine().setUseClientMode(false);
+
+        return new HttpConnection(conn);
+    }
 
     private HttpConnection(AsyncConnection conn) {
         mConn = conn;
