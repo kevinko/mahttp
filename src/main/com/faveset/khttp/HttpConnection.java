@@ -159,6 +159,7 @@ class HttpConnection {
         SSLNonBlockingConnection conn =
             new SSLNonBlockingConnection(selector, chan, HeapByteBufferFactory.get(), taskQueue, ctx);
         conn.getSSLEngine().setUseClientMode(false);
+        conn.start();
 
         return new HttpConnection(conn);
     }
