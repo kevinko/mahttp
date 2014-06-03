@@ -14,7 +14,6 @@ import java.nio.charset.Charset;
 import java.security.cert.CertificateException;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLException;
@@ -54,11 +53,7 @@ public class SSLNonBlockingConnectionTest {
         @Override
         protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                 SelectTaskQueue taskQueue) throws IOException {
-            try {
-                return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, mCtx);
-            } catch (NoSuchAlgorithmException e) {
-                throw new RuntimeException(e);
-            }
+            return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, mCtx);
         }
     }
 
@@ -181,11 +176,7 @@ public class SSLNonBlockingConnectionTest {
             @Override
             protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                     SelectTaskQueue taskQueue) throws IOException {
-                try {
-                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
-                } catch (NoSuchAlgorithmException e) {
-                    throw new RuntimeException(e);
-                }
+                return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
             }
 
             @Override
@@ -216,11 +207,7 @@ public class SSLNonBlockingConnectionTest {
                 @Override
                 protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                         SelectTaskQueue taskQueue) throws IOException {
-                    try {
-                        return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
-                    } catch (NoSuchAlgorithmException e) {
-                        throw new RuntimeException(e);
-                    }
+                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
                 }
 
                 @Override
@@ -251,11 +238,7 @@ public class SSLNonBlockingConnectionTest {
                 @Override
                 protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                         SelectTaskQueue taskQueue) throws IOException {
-                    try {
-                        return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
-                    } catch (NoSuchAlgorithmException e) {
-                        throw new RuntimeException(e);
-                    }
+                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
                 }
 
                 @Override
@@ -286,11 +269,7 @@ public class SSLNonBlockingConnectionTest {
             @Override
             protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                     SelectTaskQueue taskQueue) throws IOException {
-                try {
-                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
-                } catch (NoSuchAlgorithmException e) {
-                    throw new RuntimeException(e);
-                }
+                return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
             }
 
             @Override
@@ -321,11 +300,7 @@ public class SSLNonBlockingConnectionTest {
             @Override
             protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                     SelectTaskQueue taskQueue) throws IOException {
-                try {
-                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
-                } catch (NoSuchAlgorithmException e) {
-                    throw new RuntimeException(e);
-                }
+                return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
             }
 
             @Override
@@ -360,11 +335,7 @@ public class SSLNonBlockingConnectionTest {
             @Override
             protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                     SelectTaskQueue taskQueue) throws IOException {
-                try {
-                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
-                } catch (NoSuchAlgorithmException e) {
-                    throw new RuntimeException(e);
-                }
+                return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
             }
 
             @Override
@@ -400,11 +371,7 @@ public class SSLNonBlockingConnectionTest {
             @Override
             protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                     SelectTaskQueue taskQueue) throws IOException {
-                try {
-                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
-                } catch (NoSuchAlgorithmException e) {
-                    throw new RuntimeException(e);
-                }
+                return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
             }
 
             @Override
@@ -442,11 +409,7 @@ public class SSLNonBlockingConnectionTest {
             @Override
             protected AsyncConnection makeConn(Selector selector, SocketChannel chan, int bufferSize,
                     SelectTaskQueue taskQueue) throws IOException {
-                try {
-                    return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
-                } catch (NoSuchAlgorithmException e) {
-                    throw new RuntimeException(e);
-                }
+                return new SSLNonBlockingConnection(selector, chan, new HeapByteBufferFactory(), taskQueue, ctx);
             }
 
             @Override
