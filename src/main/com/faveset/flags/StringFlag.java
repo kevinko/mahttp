@@ -24,7 +24,7 @@ public class StringFlag extends BaseFlag {
 
     @Override
     public boolean isSingular() {
-        return true;
+        return false;
     }
 
     @Override
