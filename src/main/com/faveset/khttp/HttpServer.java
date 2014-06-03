@@ -2,6 +2,7 @@
 
 package com.faveset.khttp;
 
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -88,6 +89,15 @@ public class HttpServer {
             String password) throws CertificateException, IOException, KeyManagementException,
             KeyStoreException, UnrecoverableKeyException {
         mSSLContext = SSLUtils.makeSSLContext(keyStoreStream, trustStoreStream, password);
+    }
+
+    public void configureSSL(String keyStoreFile, String trustStoreFile, String password)
+            throws CertificateException, IOException, KeyManagementException, KeyStoreException,
+            UnrecoverableKeyException {
+        FileInputStream keyFile = new FileInputStream(keyStoreFile);
+        FileInputStream trustFile = new FileInputStream(trustStoreFile);
+
+        configureSSL(keyFile, trustFile, password);
     }
 
     public void close() throws IOException {
