@@ -178,7 +178,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
      */
     public SSLNonBlockingConnection(Selector selector, SocketChannel chan,
             ByteBufferFactory bufFactory, SelectTaskQueue nonBlockingTaskQueue, SSLContext ctx)
-            throws IOException, NoSuchAlgorithmException {
+            throws IOException {
         mConnState = ConnState.ACTIVE;
 
         mSelectTaskQueue = nonBlockingTaskQueue;
