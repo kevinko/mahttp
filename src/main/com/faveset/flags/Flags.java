@@ -151,6 +151,12 @@ public class Flags {
         return flag;
     }
 
+    public static StringFlag registerString(String name, String defValue, String desc) {
+        StringFlag flag = new StringFlag(defValue, desc);
+        get().registerFlag(name, flag);
+        return flag;
+    }
+
     /**
      * Writes a help message for the configured flags using builder.
      */
