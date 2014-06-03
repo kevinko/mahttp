@@ -100,6 +100,10 @@ public class HttpServer {
         configureSSL(keyFile, trustFile, password);
     }
 
+    /**
+     * Cleans up all resources used by the http server.  Once closed, it is effectively terminated
+     * and cannot be restarted.
+     */
     public void close() throws IOException {
         // This also cancels the key.
         mListenChan.close();
@@ -113,6 +117,9 @@ public class HttpServer {
         mConnectionSet.clear();
 
         mSelector.close();
+
+        // Clean up all static resources.
+        SSLNonBlockingConnection.shutdown();
     }
 
     private void handleAccept(SelectableChannel chanArg) {

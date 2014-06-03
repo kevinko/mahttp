@@ -7,8 +7,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.security.NoSuchAlgorithmException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
@@ -47,7 +47,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
         UNWRAP,
     }
 
-    private static Executor sSerialWorkerExecutor = Executors.newSingleThreadExecutor();
+    private static ExecutorService sSerialWorkerExecutor = Executors.newSingleThreadExecutor();
 
     // Virtually all browsers support TLSv1.
     private static final String sSSLProtocol = "TLS";
@@ -166,6 +166,13 @@ class SSLNonBlockingConnection implements AsyncConnection {
                 onNetSend(conn);
             }
         };
+
+    /**
+     * This must be called to clean up static resources (SingleThreadExecutor) on process completion.
+     */
+    public static void shutdown() {
+        sSerialWorkerExecutor.shutdownNow();
+    }
 
     /**
      * @param selector
