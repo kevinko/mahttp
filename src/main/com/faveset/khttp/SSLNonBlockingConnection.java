@@ -322,6 +322,10 @@ class SSLNonBlockingConnection implements AsyncConnection {
     }
 
     private void dispatchImpl(StepState initState) throws IOException {
+        if (mConnState == ConnState.CLOSED) {
+            return;
+        }
+
         // We use a two-phase commit when the WAITING state is reached to determine whether we are
         // really done.  doneUnwrapOrWrap is true after an unwrap or wrap step returns nextState WAITING
         // (i.e., unwrapping is done).  It signals that the first phase has been completed.
