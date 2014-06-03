@@ -280,9 +280,7 @@ class SSLNonBlockingConnection implements AsyncConnection {
      * @throws IOException
      */
     private void closeImmediately() throws IOException {
-        System.out.println("closeImmediately() start");
         if (mConnState == ConnState.CLOSED) {
-            System.out.println("closeImmediately(): already closed");
             return;
         }
 
