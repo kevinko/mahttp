@@ -2,6 +2,8 @@
 
 package com.faveset.flags;
 
+import java.io.PrintStream;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
@@ -9,6 +11,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * A "-help" flag will always be installed.  It will print help for the current flag configuration
+ * and then perform a System.exit.
+ *
  * Example usage:
  *   public class Foo {
  *     private BoolFlag mFooFlag = Flags.registerBool("foo", true, "enable foo");
@@ -24,6 +29,8 @@ import java.util.Set;
 public class Flags {
     // The singleton flags object.
     private static Flags sFlags;
+
+    private static String sHelpFlagName = "help";
 
     private ArrayList<String> mNonFlagArgs;
 
@@ -119,7 +126,14 @@ public class Flags {
 
             FlagParser parser = mFlagParsers.get(flagName);
             if (parser == null) {
-                throw new IllegalArgumentException(String.format("unknown flag %s", flagName));
+                // See if this is a help flag.
+                if (flagName.equals(sHelpFlagName)) {
+                    writeHelp(System.out);
+
+                    System.exit(0);
+                } else {
+                    throw new IllegalArgumentException(String.format("unknown flag %s", flagName));
+                }
             }
 
             // Now, finalize the value if it is not embedded within the
@@ -155,6 +169,12 @@ public class Flags {
         StringFlag flag = new StringFlag(defValue, desc);
         get().registerFlag(name, flag);
         return flag;
+    }
+
+    public void writeHelp(PrintStream out) {
+        StringBuilder builder = new StringBuilder();
+        writeHelp(builder);
+        out.println(builder.toString());
     }
 
     /**
