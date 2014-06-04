@@ -9,6 +9,8 @@
 	<property name="jarfile" value="${jar.dir}/${ant.project.name}.jar" />
 	<property name="test-jarfile" value="${jar.dir}/${ant.project.name}-test.jar" />
 	<property name="junit-jarfile" value="/usr/share/java/junit4.jar" />
+	<property name="spongycastle-core-jarfile" value="lib/spongycastle-core-1.50.jar" />
+	<property name="spongycastle-prov-jarfile" value="lib/spongycastle-prov-1.50.jar" />
 
 	<property name="main.srcdir" value="${basedir}/src/main" />
 	<property name="test.srcdir" value="${basedir}/src/test" />
@@ -22,15 +24,25 @@
 
 	<target name="compile-main">
 		<mkdir dir="${classes.dir}" />
-		<javac debug="${debug}" includeantruntime="false" srcdir="${main.srcdir}" destdir="${classes.dir}" />
+		<javac debug="${debug}"
+			includeantruntime="false"
+			srcdir="${main.srcdir}"
+			destdir="${classes.dir}">
+			<classpath>
+				<pathelement location="${spongycastle-core-jarfile}" />
+				<pathelement location="${spongycastle-prov-jarfile}" />
+			</classpath>
+		</javac>
 	</target>
 
 	<target name="compile-test" depends="compile-main">
 		<mkdir dir="${test-classes.dir}" />
 		<javac debug="${debug}" includeantruntime="false" srcdir="${test.srcdir}" destdir="${test-classes.dir}">
 			<classpath>
+				<pathelement location="${classes.dir}" />
 				<pathelement path="${junit-jarfile}" />
-				<pathelement path="${classes.dir}" />
+				<pathelement location="${spongycastle-core-jarfile}" />
+				<pathelement location="${spongycastle-prov-jarfile}" />
 			</classpath>
 		</javac>
 	</target>
@@ -50,6 +62,8 @@
 				<pathelement location="${jarfile}" />
 				<pathelement location="${test-classes.dir}" />
 				<pathelement location="${junit-jarfile}" />
+				<pathelement location="${spongycastle-core-jarfile}" />
+				<pathelement location="${spongycastle-prov-jarfile}" />
 			</classpath>
 
 			<formatter type="xml" />
