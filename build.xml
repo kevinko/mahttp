@@ -10,6 +10,7 @@
 	<property name="test-jarfile" value="${jar.dir}/${ant.project.name}-test.jar" />
 	<property name="junit-jarfile" value="/usr/share/java/junit4.jar" />
 	<property name="spongycastle-core-jarfile" value="lib/spongycastle-core-1.50.jar" />
+	<property name="spongycastle-pkix-jarfile" value="lib/spongycastle-pkix-1.50.jar" />
 	<property name="spongycastle-prov-jarfile" value="lib/spongycastle-prov-1.50.jar" />
 
 	<property name="main.srcdir" value="${basedir}/src/main" />
@@ -30,6 +31,7 @@
 			destdir="${classes.dir}">
 			<classpath>
 				<pathelement location="${spongycastle-core-jarfile}" />
+				<pathelement location="${spongycastle-pkix-jarfile}" />
 				<pathelement location="${spongycastle-prov-jarfile}" />
 			</classpath>
 		</javac>
@@ -42,6 +44,7 @@
 				<pathelement location="${classes.dir}" />
 				<pathelement path="${junit-jarfile}" />
 				<pathelement location="${spongycastle-core-jarfile}" />
+				<pathelement location="${spongycastle-pkix-jarfile}" />
 				<pathelement location="${spongycastle-prov-jarfile}" />
 			</classpath>
 		</javac>
@@ -63,6 +66,7 @@
 				<pathelement location="${test-classes.dir}" />
 				<pathelement location="${junit-jarfile}" />
 				<pathelement location="${spongycastle-core-jarfile}" />
+				<pathelement location="${spongycastle-pkix-jarfile}" />
 				<pathelement location="${spongycastle-prov-jarfile}" />
 			</classpath>
 
