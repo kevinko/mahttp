@@ -84,7 +84,7 @@ public class KeyStoreBuilder {
     }
 
     public void build(OutputStream out) throws IOException, KeyStoreException {
-        char[] passChars = null;
+        char[] passChars = new char[0];
         if (mPassword != null) {
             passChars = mPassword.toCharArray();
         }
