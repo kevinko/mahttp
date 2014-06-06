@@ -16,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
+import java.security.Security;
 import java.security.Signature;
 
 import java.util.Date;
@@ -26,6 +27,7 @@ import org.spongycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.spongycastle.asn1.x500.X500Name;
 import org.spongycastle.cert.X509CertificateHolder;
 import org.spongycastle.cert.X509v3CertificateBuilder;
+import org.spongycastle.jce.provider.BouncyCastleProvider;
 import org.spongycastle.operator.ContentSigner;
 
 public class CertificateBuilder {
@@ -290,5 +292,9 @@ public class CertificateBuilder {
     public CertificateBuilder setSerial(BigInteger serial) {
         mSerial = serial;
         return this;
+    }
+
+    static {
+        Security.insertProviderAt(new BouncyCastleProvider(), 1);
     }
 }
