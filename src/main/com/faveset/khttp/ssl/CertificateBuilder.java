@@ -29,68 +29,118 @@ import org.spongycastle.cert.X509v3CertificateBuilder;
 import org.spongycastle.operator.ContentSigner;
 
 public class CertificateBuilder {
-    public static class Details {
-        private static final String sDetailDefault = "None";
+    public static class DistinguishedName {
+        private static final String sDetailDefault = "Unknown";
+        private static String[] sLabels = {
+            "C",
+            "ST",
+            "L",
+            "O",
+            "OU",
+            "CN",
+            "emailAddress",
+        };
 
-        protected String mCommonName;
-        protected String mCountry;
-        protected String mEmail;
-        protected String mLocality;
-        protected String mOrgName;
-        protected String mOrgUnit;
-        protected String mState;
+        private String mCommonName = sDetailDefault;
+        private String mCountry = sDetailDefault;
+        private String mEmail = sDetailDefault;
+        private String mLocality = sDetailDefault;
+        private String mOrgName = sDetailDefault;
+        private String mOrgUnit = sDetailDefault;
+        private String mState = sDetailDefault;
 
-        public Details() {
+        // This must correspond to the order in sLabels.
+        private String[] mComponents = new String[]{
+            mCountry,
+            mState,
+            mLocality,
+            mOrgName,
+            mOrgUnit,
+            mCommonName,
+            mEmail,
+        };
+
+        public DistinguishedName() {
         }
 
-        public Details setCommonName(String name) {
+        /**
+         * Set to null to omit on output.
+         */
+        public DistinguishedName setCommonName(String name) {
             mCommonName = name;
             return this;
         }
 
-        public Details setCountry(String name) {
+        /**
+         * Set to null to omit on output.
+         */
+        public DistinguishedName setCountry(String name) {
             mCountry = name;
             return this;
         }
 
-        public Details setEmail(String email) {
+        /**
+         * Set to null to omit on output.
+         */
+        public DistinguishedName setEmail(String email) {
             mEmail = email;
             return this;
         }
 
-        public Details setLocality(String locality) {
+        /**
+         * Set to null to omit on output.
+         */
+        public DistinguishedName setLocality(String locality) {
             mLocality = locality;
             return this;
         }
 
-        public Details setOrgName(String orgName) {
+        /**
+         * Set to null to omit on output.
+         */
+        public DistinguishedName setOrgName(String orgName) {
             mOrgName = orgName;
             return this;
         }
 
-        public Details setOrgUnit(String orgUnit) {
+        /**
+         * Set to null to omit on output.
+         */
+        public DistinguishedName setOrgUnit(String orgUnit) {
             mOrgUnit = orgUnit;
             return this;
         }
 
-        public Details setState(String state) {
+        /**
+         * Set to null to omit on output.
+         */
+        public DistinguishedName setState(String state) {
             mState = state;
             return this;
         }
 
         public String toString() {
-            return String.format("C=%s, ST=%s, L=%s, O=%s, OU=%s, CN=%s, CA/emailAddress=%s",
-                    mCountry, mState, mLocality, mOrgName, mOrgUnit, mCommonName, mEmail);
-        }
-    }
+            StringBuilder builder = new StringBuilder();
 
-    public static class SubjectDetails extends Details {
-        public SubjectDetails() {}
+            boolean first = true;
 
-        @Override
-        public String toString() {
-            return String.format("C=%s, ST=%s, L=%s, O=%s, OU=%s, CN=%s/emailAddress=%s",
-                    mCountry, mState, mLocality, mOrgName, mOrgUnit, mCommonName, mEmail);
+            for (int ii = 0; ii < mComponents.length; ii++) {
+                String elem = mComponents[ii];
+                if (elem == null) {
+                    continue;
+                }
+
+                if (first) {
+                    first = false;
+                } else {
+                    builder.append(", ");
+                }
+
+                String label = sLabels[ii];
+                builder.append(label + "=" + elem);
+            }
+
+            return builder.toString();
         }
     }
 
@@ -149,9 +199,9 @@ public class CertificateBuilder {
 
     private int mKeySize;
 
-    private Details mIssuerDetails;
+    private DistinguishedName mIssuer;
 
-    private SubjectDetails mSubjectDetails;
+    private DistinguishedName mSubject;
 
     private BigInteger mSerial = BigInteger.ZERO;
 
@@ -164,8 +214,8 @@ public class CertificateBuilder {
 
         mKeySize = sKeySizeDefault;
 
-        mIssuerDetails = new Details();
-        mSubjectDetails = new SubjectDetails();
+        mIssuer = new DistinguishedName();
+        mSubject = new DistinguishedName();
 
         mNotBefore = new Date(now);
         mNotAfter = new Date(now + sDefaultExpireMillis);
@@ -188,8 +238,8 @@ public class CertificateBuilder {
 
         KeyPair keyPair = gen.generateKeyPair();
 
-        X500Name issuer = new X500Name(mIssuerDetails.toString());
-        X500Name subject = new X500Name(mSubjectDetails.toString());
+        X500Name issuer = new X500Name(mIssuer.toString());
+        X500Name subject = new X500Name(mSubject.toString());
         SubjectPublicKeyInfo pubKeyInfo =
             SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
 
@@ -209,12 +259,12 @@ public class CertificateBuilder {
         }
     }
 
-    public CertificateBuilder.Details getIssuerDetails() {
-        return mIssuerDetails;
+    public CertificateBuilder.DistinguishedName getIssuer() {
+        return mIssuer;
     }
 
-    public CertificateBuilder.Details getSubjectDetails() {
-        return mSubjectDetails;
+    public CertificateBuilder.DistinguishedName getSubject() {
+        return mSubject;
     }
 
     public CertificateBuilder setNotAfter(Date notAfter) {
