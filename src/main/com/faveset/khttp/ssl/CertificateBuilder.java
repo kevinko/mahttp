@@ -29,6 +29,71 @@ import org.spongycastle.cert.X509v3CertificateBuilder;
 import org.spongycastle.operator.ContentSigner;
 
 public class CertificateBuilder {
+    public static class Details {
+        private static final String sDetailDefault = "None";
+
+        protected String mCommonName;
+        protected String mCountry;
+        protected String mEmail;
+        protected String mLocality;
+        protected String mOrgName;
+        protected String mOrgUnit;
+        protected String mState;
+
+        public Details() {
+        }
+
+        public Details setCommonName(String name) {
+            mCommonName = name;
+            return this;
+        }
+
+        public Details setCountry(String name) {
+            mCountry = name;
+            return this;
+        }
+
+        public Details setEmail(String email) {
+            mEmail = email;
+            return this;
+        }
+
+        public Details setLocality(String locality) {
+            mLocality = locality;
+            return this;
+        }
+
+        public Details setOrgName(String orgName) {
+            mOrgName = orgName;
+            return this;
+        }
+
+        public Details setOrgUnit(String orgUnit) {
+            mOrgUnit = orgUnit;
+            return this;
+        }
+
+        public Details setState(String state) {
+            mState = state;
+            return this;
+        }
+
+        public String toString() {
+            return String.format("C=%s, ST=%s, L=%s, O=%s, OU=%s, CN=%s, CA/emailAddress=%s",
+                    mCountry, mState, mLocality, mOrgName, mOrgUnit, mCommonName, mEmail);
+        }
+    }
+
+    public static class SubjectDetails extends Details {
+        public SubjectDetails() {}
+
+        @Override
+        public String toString() {
+            return String.format("C=%s, ST=%s, L=%s, O=%s, OU=%s, CN=%s/emailAddress=%s",
+                    mCountry, mState, mLocality, mOrgName, mOrgUnit, mCommonName, mEmail);
+        }
+    }
+
     private static class Signer implements ContentSigner {
         private static final String sSigAlgorithm = "SHA256withRSA";
 
@@ -84,9 +149,9 @@ public class CertificateBuilder {
 
     private int mKeySize;
 
-    private String mIssuer;
+    private Details mIssuerDetails;
 
-    private String mSubject;
+    private SubjectDetails mSubjectDetails;
 
     private BigInteger mSerial = BigInteger.ZERO;
 
@@ -98,6 +163,9 @@ public class CertificateBuilder {
         long now = System.currentTimeMillis();
 
         mKeySize = sKeySizeDefault;
+
+        mIssuerDetails = new Details();
+        mSubjectDetails = new SubjectDetails();
 
         mNotBefore = new Date(now);
         mNotAfter = new Date(now + sDefaultExpireMillis);
@@ -120,8 +188,8 @@ public class CertificateBuilder {
 
         KeyPair keyPair = gen.generateKeyPair();
 
-        X500Name issuer = new X500Name(mIssuer);
-        X500Name subject = new X500Name(mSubject);
+        X500Name issuer = new X500Name(mIssuerDetails.toString());
+        X500Name subject = new X500Name(mSubjectDetails.toString());
         SubjectPublicKeyInfo pubKeyInfo =
             SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
 
@@ -141,9 +209,12 @@ public class CertificateBuilder {
         }
     }
 
-    public CertificateBuilder setIssuer(String issuer) {
-        mIssuer = issuer;
-        return this;
+    public CertificateBuilder.Details getIssuerDetails() {
+        return mIssuerDetails;
+    }
+
+    public CertificateBuilder.Details getSubjectDetails() {
+        return mSubjectDetails;
     }
 
     public CertificateBuilder setNotAfter(Date notAfter) {
@@ -168,11 +239,6 @@ public class CertificateBuilder {
 
     public CertificateBuilder setSerial(BigInteger serial) {
         mSerial = serial;
-        return this;
-    }
-
-    public CertificateBuilder setSubject(String subject) {
-        mSubject = subject;
         return this;
     }
 }
