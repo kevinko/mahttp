@@ -47,7 +47,11 @@ public class KeyStoreBuilder {
     public static KeyStoreBuilder open(String filename, String password)
             throws IOException, KeyStoreException {
         FileInputStream input = new FileInputStream(filename);
-        return open(input, password);
+        try {
+            return open(input, password);
+        } finally {
+            input.close();
+        }
     }
 
     public static KeyStoreBuilder open(InputStream input, String password)
@@ -76,6 +80,7 @@ public class KeyStoreBuilder {
     public void build(String outFilename) throws IOException, KeyStoreException {
         FileOutputStream out = new FileOutputStream(outFilename);
         build(out);
+        out.close();
     }
 
     public void build(OutputStream out) throws IOException, KeyStoreException {
