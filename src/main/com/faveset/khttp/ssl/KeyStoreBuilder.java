@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
+import java.security.PrivateKey;
 import java.security.cert.Certificate;
 
 /**
@@ -96,6 +97,9 @@ public class KeyStoreBuilder {
         }
     }
 
+    /**
+     * Stores a trust certificate into the keystore.
+     */
     public KeyStoreBuilder setCertificate(String alias, Certificate cert) throws KeyStoreException {
         mKeyStore.setCertificateEntry(alias, cert);
         return this;
@@ -106,6 +110,17 @@ public class KeyStoreBuilder {
      */
     public KeyStoreBuilder setPassword(String password) {
         mPassword = password;
+        return this;
+    }
+
+    /**
+     * Stores a private key into the keystore using chain as the certificate chain for the key.
+     * The password specified by setPassword will be used to secure the key.
+     */
+    public KeyStoreBuilder setPrivateKey(String alias, PrivateKey key, Certificate[] chain)
+            throws KeyStoreException {
+        char[] passChars = mPassword.toCharArray();
+        mKeyStore.setKeyEntry(alias, key, passChars, chain);
         return this;
     }
 }
