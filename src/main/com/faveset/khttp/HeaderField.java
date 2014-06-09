@@ -3,7 +3,7 @@
 package com.faveset.khttp;
 
 // This contains all header fields defined in RFC2616.
-class HeaderField {
+public class HeaderField {
     public static class Entity {
         public static final String ALLOW = "Allow";
         public static final String CONTENT_ENCODING = "Content-Encoding";
