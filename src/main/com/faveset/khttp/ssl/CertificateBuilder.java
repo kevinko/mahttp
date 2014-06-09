@@ -16,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.Security;
 import java.security.SecureRandom;
 import java.security.Signature;
@@ -200,8 +201,6 @@ public class CertificateBuilder {
     // 1 year in millis.  By default, mNotAfter will be sent to now + sDefaultExpireMillis.
     private static long sDefaultExpireMillis = 365 * 24 * 60 * 60 * 1000L;
 
-    private int mKeySize;
-
     private DistinguishedName mIssuer;
 
     private DistinguishedName mSubject;
@@ -212,10 +211,33 @@ public class CertificateBuilder {
 
     private Date mNotAfter;
 
+    /**
+     * Generates a 2048-bit RSA KeyPair suitable for signing a Certificate.
+     */
+    public static KeyPair makeKey() {
+        return makeKey(sKeySizeDefault);
+    }
+
+    /**
+     * Generates an RSA KeyPair suitable for signing a Certificate.
+     *
+     * @param keySize key size in bits.  This should be 1024 or 2048.
+     */
+    public static KeyPair makeKey(int keySize) {
+        KeyPairGenerator gen;
+        try {
+            gen = KeyPairGenerator.getInstance(sKeyAlgorithm);
+        } catch (NoSuchAlgorithmException e) {
+            // RSA algorithm always exists.
+            throw new RuntimeException(e);
+        }
+        gen.initialize(keySize);
+
+        return gen.generateKeyPair();
+    }
+
     public CertificateBuilder() {
         long now = System.currentTimeMillis();
-
-        mKeySize = sKeySizeDefault;
 
         mIssuer = new DistinguishedName();
         mSubject = new DistinguishedName();
@@ -227,31 +249,27 @@ public class CertificateBuilder {
     }
 
     /**
+     * Generates a certificate using the signKey and publicKey.  To generate a self-signed
+     * certificate, generate a KeyPair and pass the private and public components as parameters.
+     *
+     * @param signKey Private issuer key used to sign the certificate.
+     * @param certKey Public key that will be contained within the certificate.
+     *
      * @throws IllegalArgumentException if an invalid keysize was specified.
      * @throws IOException
      */
-    public Certificate build() throws IOException, IllegalArgumentException {
-        // Generate a public key pair for the issuer.
-        KeyPairGenerator gen;
-        try {
-            gen = KeyPairGenerator.getInstance(sKeyAlgorithm);
-        } catch (NoSuchAlgorithmException e) {
-            // RSA algorithm always exists.
-            throw new RuntimeException(e);
-        }
-        gen.initialize(mKeySize);
-
-        KeyPair keyPair = gen.generateKeyPair();
-
+    public Certificate build(PrivateKey signKey, PublicKey certKey)
+            throws IOException, IllegalArgumentException {
         X500Name issuer = new X500Name(mIssuer.toString());
         X500Name subject = new X500Name(mSubject.toString());
         SubjectPublicKeyInfo pubKeyInfo =
-            SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
+            SubjectPublicKeyInfo.getInstance(certKey.getEncoded());
 
         X509v3CertificateBuilder builder = new X509v3CertificateBuilder(issuer, mSerial,
             mNotBefore, mNotAfter, subject, pubKeyInfo);
 
-        byte[] certBytes = builder.build(new Signer(keyPair.getPrivate())).getEncoded();
+        // Sign the certificate with its own key to make it self-signed.
+        byte[] certBytes = builder.build(new Signer(signKey)).getEncoded();
 
         try {
             CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
@@ -279,16 +297,6 @@ public class CertificateBuilder {
 
     public CertificateBuilder setNotBefore(Date notBefore) {
         mNotBefore = notBefore;
-        return this;
-    }
-
-    /**
-     * RSA key size in bits.
-     *
-     * @param numBits must be 1024 or 2048.
-     */
-    public CertificateBuilder setKeySize(int numBits) {
-        mKeySize = numBits;
         return this;
     }
 
