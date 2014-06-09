@@ -1,6 +1,6 @@
 // Copyright 2014, Kevin Ko <kevin@faveset.com>
 
-package com.faveset.khttp.ssl;
+package com.faveset.ssl;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

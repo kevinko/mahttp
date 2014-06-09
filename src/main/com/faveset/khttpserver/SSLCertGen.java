@@ -12,8 +12,8 @@ import java.security.cert.CertificateEncodingException;
 import com.faveset.flags.Flags;
 import com.faveset.flags.BoolFlag;
 import com.faveset.flags.StringFlag;
-import com.faveset.khttp.ssl.CertificateBuilder;
-import com.faveset.khttp.ssl.KeyStoreBuilder;
+import com.faveset.ssl.CertificateBuilder;
+import com.faveset.ssl.KeyStoreBuilder;
 
 public class SSLCertGen {
     private static StringFlag sAliasFlag =
