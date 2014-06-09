@@ -27,7 +27,6 @@ import javax.net.ssl.SSLContext;
 
 import com.faveset.log.Log;
 import com.faveset.log.NullLog;
-import com.faveset.khttp.ssl.Utils;
 
 public class HttpServer {
     private static final String sTag = HttpServer.class.toString();
@@ -89,7 +88,7 @@ public class HttpServer {
     public void configureSSL(InputStream keyStoreStream, InputStream trustStoreStream,
             String password) throws CertificateException, IOException, KeyManagementException,
             KeyStoreException, UnrecoverableKeyException {
-        mSSLContext = Utils.makeSSLContext(keyStoreStream, trustStoreStream, password);
+        mSSLContext = SSLUtils.makeSSLContext(keyStoreStream, trustStoreStream, password);
     }
 
     public void configureSSL(String keyStoreFile, String trustStoreFile, String password)

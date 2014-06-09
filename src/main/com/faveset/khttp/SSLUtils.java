@@ -1,6 +1,6 @@
 // Copyright 2014, Kevin Ko <kevin@faveset.com>
 
-package com.faveset.khttp.ssl;
+package com.faveset.khttp;
 
 import java.io.InputStream;
 import java.io.IOException;
@@ -14,7 +14,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 
-public class Utils {
+public class SSLUtils {
     /**
      * This creates and initializes an SSLContext, using the keystore and trust store from the
      * given streams.
