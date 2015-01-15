@@ -675,7 +675,8 @@ public class NonBlockingConnectionTest {
 
     @Test
     public void testSendPartial() throws IOException, InterruptedException {
-        int len = 1 << 20;
+        // Choose something big that will exceed the size of a loopback buffer.
+        int len = 1 << 22;
         final String expectedString = Helper.makeTestString(len - 1);
         final ByteBuffer buf = Helper.makeByteBuffer(expectedString);
 
@@ -740,7 +741,7 @@ public class NonBlockingConnectionTest {
     @Test
     public void testSendClose() throws IOException, InterruptedException {
         // Pick a large value that won't fit in a socket buffer.
-        int bufLen = 1 << 20;
+        int bufLen = 1 << 22;
         String expectedStr = Helper.makeTestString(bufLen - 1);
 
         SendCloseTester tester = new SendCloseTester(makeRecvCloseTask(expectedStr, 1024),
