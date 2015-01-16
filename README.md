@@ -49,7 +49,7 @@ $ java -server -Xmx512m -classpath build/classes/main com.faveset.khttpserver.Ht
 Some results
 ------------
 
-Client is an Intel Core 2 Duo 2.26ghz connected via 100mbs switch to a
+Client is an Intel Core 2 Duo 2.26ghz connected via 100mbs switch to an
 Intel Xeon (Harpertown) 3ghz, both running Ubuntu 14.04.
 
 Client benchmark command:
