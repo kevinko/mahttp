@@ -13,9 +13,9 @@ import java.security.cert.CertificateException;
 import sun.misc.Signal;
 import sun.misc.SignalHandler;
 
-import com.faveset.khttp.HttpHandler;
-import com.faveset.khttp.HttpRequest;
-import com.faveset.khttp.HttpResponseWriter;
+import com.faveset.mahttpd.HttpHandler;
+import com.faveset.mahttpd.HttpRequest;
+import com.faveset.mahttpd.HttpResponseWriter;
 
 import com.faveset.flags.BoolFlag;
 import com.faveset.flags.Flags;
@@ -50,7 +50,7 @@ public class HttpServer {
 
         int port = new Integer(flags.getArg(0));
 
-        final com.faveset.khttp.HttpServer server = new com.faveset.khttp.HttpServer();
+        final com.faveset.mahttpd.HttpServer server = new com.faveset.mahttpd.HttpServer();
 
         OutputStreamLog log = null;
         if (sLogFlag.get()) {
